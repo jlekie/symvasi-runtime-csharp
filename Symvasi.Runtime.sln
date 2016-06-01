@@ -1,0 +1,32 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 2012
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Common", "Common\Common.csproj", "{AD41A10F-52F9-4446-A744-D5B10BC4BD36}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ZeroMQTransport", "ZeroMQTransport\ZeroMQTransport.csproj", "{6F8EEA67-7A22-43D9-A5CA-E398BC1F585D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MsgPackProtocol", "MsgPackProtocol\MsgPackProtocol.csproj", "{6C66A544-ABEC-4330-8865-88F44DD8DD2F}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{AD41A10F-52F9-4446-A744-D5B10BC4BD36}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AD41A10F-52F9-4446-A744-D5B10BC4BD36}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AD41A10F-52F9-4446-A744-D5B10BC4BD36}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AD41A10F-52F9-4446-A744-D5B10BC4BD36}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6F8EEA67-7A22-43D9-A5CA-E398BC1F585D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6F8EEA67-7A22-43D9-A5CA-E398BC1F585D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6F8EEA67-7A22-43D9-A5CA-E398BC1F585D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6F8EEA67-7A22-43D9-A5CA-E398BC1F585D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6C66A544-ABEC-4330-8865-88F44DD8DD2F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6C66A544-ABEC-4330-8865-88F44DD8DD2F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6C66A544-ABEC-4330-8865-88F44DD8DD2F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6C66A544-ABEC-4330-8865-88F44DD8DD2F}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
