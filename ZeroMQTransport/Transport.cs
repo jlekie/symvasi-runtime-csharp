@@ -8,23 +8,27 @@ using NetMQ;
 using NetMQ.Core;
 using NetMQ.Sockets;
 
+using Symvasi.Runtime.Acquisition;
+
 namespace Symvasi.Runtime.Transport.ZeroMQ
 {
     public class ZeroMQServerTransport : AServerTransport
     {
-        public string ConnectionString { get; private set; }
+        public IZeroMQServerEndpoint ZeroMQEndpoint { get; private set; }
 
         protected ResponseSocket Socket { get; private set; }
 
-        public ZeroMQServerTransport(string connectionString)
-            : base()
+        public ZeroMQServerTransport(IZeroMQServerEndpoint endpoint)
+            : base(endpoint)
         {
-            this.ConnectionString = connectionString;
+            this.ZeroMQEndpoint = endpoint;
         }
 
         public override void Listen()
         {
-            this.Socket = new ResponseSocket(this.ConnectionString);
+            var connectionString = this.ZeroMQEndpoint.ToServerConnectionString();
+
+            this.Socket = new ResponseSocket(connectionString);
         }
 
         public override void Send(byte[] data)
@@ -38,21 +42,23 @@ namespace Symvasi.Runtime.Transport.ZeroMQ
     }
     public class ZeroMQRequestServerTransport : AServerTransport
     {
-        public string ConnectionString { get; private set; }
+        public IZeroMQServerEndpoint ZeroMQEndpoint { get; private set; }
 
         protected RequestSocket Socket { get; private set; }
 
         private NetMQFrame ClientAddress { get; set; }
 
-        public ZeroMQRequestServerTransport(string connectionString)
-            : base()
+        public ZeroMQRequestServerTransport(IZeroMQServerEndpoint endpoint)
+            : base(endpoint)
         {
-            this.ConnectionString = connectionString;
+            this.ZeroMQEndpoint = endpoint;
         }
 
         public override void Listen()
         {
-            this.Socket = new RequestSocket(this.ConnectionString);
+            var connectionString = this.ZeroMQEndpoint.ToClientConnectionString();
+
+            this.Socket = new RequestSocket(connectionString);
 
             Console.WriteLine("Sending registration request...");
             this.Socket.SendFrameEmpty();
@@ -87,19 +93,21 @@ namespace Symvasi.Runtime.Transport.ZeroMQ
 
     public class ZeroMQClientTransport : AClientTransport
     {
-        public string ConnectionString { get; private set; }
+        public IZeroMQClientEndpoint ZeroMQEndpoint { get; private set; }
 
         protected RequestSocket Socket { get; private set; }
 
-        public ZeroMQClientTransport(string connectionString)
-            : base()
+        public ZeroMQClientTransport(IZeroMQClientEndpoint endpoint)
+            : base(endpoint)
         {
-            this.ConnectionString = connectionString;
+            this.ZeroMQEndpoint = endpoint;
         }
 
         public override void Connect()
         {
-            this.Socket = new RequestSocket(this.ConnectionString);
+            var connectionString = this.ZeroMQEndpoint.ToConnectionString();
+
+            this.Socket = new RequestSocket(connectionString);
         }
 
         public override void Send(byte[] data)

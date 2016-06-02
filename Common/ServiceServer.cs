@@ -40,6 +40,7 @@ namespace Symvasi.Runtime.Service
         }
         public void Stop()
         {
+            throw new NotImplementedException();
         }
 
         private void ServerHandler()

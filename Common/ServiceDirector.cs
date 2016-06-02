@@ -32,6 +32,7 @@ namespace Symvasi.Runtime.Service
         {
             var transport = this.TransportFactory();
             var protocol = this.ProtocolFactory(transport);
+
             return this.ServerFactory(transport, protocol);
         }
         public T SpawnServer()

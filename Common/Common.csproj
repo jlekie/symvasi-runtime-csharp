@@ -39,6 +39,10 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Announcer.cs" />
+    <Compile Include="Discoverer.cs" />
+    <Compile Include="EndpointFactory.cs" />
+    <Compile Include="Endpoint.cs" />
     <Compile Include="Headers.cs" />
     <Compile Include="ServiceDirector.cs" />
     <Compile Include="ServiceConsumer.cs" />

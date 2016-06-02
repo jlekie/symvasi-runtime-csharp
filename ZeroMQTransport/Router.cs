@@ -8,23 +8,25 @@ using NetMQ;
 using NetMQ.Core;
 using NetMQ.Sockets;
 
+using Symvasi.Runtime.Acquisition;
+
 namespace Symvasi.Runtime.Transport.ZeroMQ
 {
     public class Router
     {
-        public string FrontendConnectionString { get; private set; }
-        public string BackendConnectionString { get; private set; }
+        public IZeroMQServerEndpoint FrontendEndpoint { get; private set; }
+        public IZeroMQServerEndpoint BackendEndpoint { get; private set; }
 
         private Task HandlerTask { get; set; }
 
         private Queue<NetMQFrame> KnownBackends { get; set; }
 
-        public Router(string frontendConnectionString, string backendConnectionString)
+        public Router(IZeroMQServerEndpoint frontendEndpoint, IZeroMQServerEndpoint backendEndpoint)
         {
             this.KnownBackends = new Queue<NetMQFrame>();
 
-            this.FrontendConnectionString = frontendConnectionString;
-            this.BackendConnectionString = backendConnectionString;
+            this.FrontendEndpoint = frontendEndpoint;
+            this.BackendEndpoint = backendEndpoint;
         }
 
         public void Start()
@@ -33,12 +35,16 @@ namespace Symvasi.Runtime.Transport.ZeroMQ
         }
         public void Stop()
         {
+            throw new NotImplementedException();
         }
 
         private void Handler()
         {
-            using (var frontendSocket = new RouterSocket(this.FrontendConnectionString))
-            using (var backendSocket = new RouterSocket(this.BackendConnectionString))
+            var frontendConnectionString = this.FrontendEndpoint.ToServerConnectionString();
+            var backendConnectionString = this.BackendEndpoint.ToServerConnectionString();
+
+            using (var frontendSocket = new RouterSocket(frontendConnectionString))
+            using (var backendSocket = new RouterSocket(backendConnectionString))
             using (var poller = new NetMQPoller() { frontendSocket, backendSocket })
             {
                 frontendSocket.ReceiveReady += (s, a) =>

@@ -15,16 +15,27 @@ namespace Symvasi.Runtime.Transport
     }
     public interface IServerTransport : ITransport
     {
+        IServerEndpoint Endpoint { get; }
+
         void Listen();
     }
     public interface IClientTransport : ITransport
     {
+        IClientEndpoint Endpoint { get; }
+
         void Connect();
     }
 
     public abstract class AServerTransport : IServerTransport
     {
         public event EventHandler<ReceivedEventArgs> Received;
+
+        public IServerEndpoint Endpoint { get; private set; }
+
+        public AServerTransport(IServerEndpoint endpoint)
+        {
+            this.Endpoint = endpoint;
+        }
 
         public abstract void Listen();
 
@@ -40,6 +51,13 @@ namespace Symvasi.Runtime.Transport
     public abstract class AClientTransport : IClientTransport
     {
         public event EventHandler<ReceivedEventArgs> Received;
+
+        public IClientEndpoint Endpoint { get; private set; }
+
+        public AClientTransport(IClientEndpoint endpoint)
+        {
+            this.Endpoint = endpoint;
+        }
 
         public abstract void Connect();
 
