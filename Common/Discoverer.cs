@@ -15,7 +15,8 @@ namespace Symvasi.Runtime.Acquisition
 
         void Refresh();
 
-        TEndpoint GetEndpoint();
+        TEndpoint GetEndpoint(TimeSpan? timeout = null, int retryInterval = 500);
+        bool TryGetEndpoint(out TEndpoint endpoint, TimeSpan? timeout = null, int retryInterval = 500);
     }
 
     public abstract class ADiscoverer<TEndpointFactory, TEndpoint> : IDiscoverer<TEndpointFactory, TEndpoint>
@@ -46,10 +47,15 @@ namespace Symvasi.Runtime.Acquisition
 
         public void Refresh()
         {
+            var endpointCount = this.Endpoints.Count;
+
             var endpoints = this.LoadEndpoints();
             foreach (var endpoint in endpoints)
             {
-                this.Endpoints.Enqueue(endpoint);
+                if (!this.Endpoints.Contains(endpoint))
+                {
+                    this.Endpoints.Enqueue(endpoint);
+                }
             }
         }
 
@@ -61,7 +67,7 @@ namespace Symvasi.Runtime.Acquisition
                 {
                     this.Refresh();
 
-                    System.Threading.Thread.Sleep(30000);
+                    System.Threading.Thread.Sleep(5000);
                 }
                 catch (Exception ex)
                 {
@@ -70,13 +76,42 @@ namespace Symvasi.Runtime.Acquisition
             }
         }
 
-        public TEndpoint GetEndpoint()
+        public TEndpoint GetEndpoint(TimeSpan? timeout = null, int retryInterval = 500)
         {
+            if (!timeout.HasValue)
+                timeout = TimeSpan.FromSeconds(30);
+
+            var startTime = DateTime.Now;
+
             TEndpoint endpoint;
-            this.Endpoints.TryDequeue(out endpoint);
+            while (!this.Endpoints.TryDequeue(out endpoint))
+            {
+                if ((DateTime.Now - startTime) > timeout)
+                    throw new Exception("Could not find backend endpoint.");
+
+                System.Threading.Thread.Sleep(retryInterval);
+            }
             this.Endpoints.Enqueue(endpoint);
 
             return endpoint;
+        }
+        public bool TryGetEndpoint(out TEndpoint endpoint, TimeSpan? timeout = null, int retryInterval = 500)
+        {
+            if (!timeout.HasValue)
+                timeout = TimeSpan.FromSeconds(30);
+
+            var startTime = DateTime.Now;
+
+            while (!this.Endpoints.TryDequeue(out endpoint))
+            {
+                if ((DateTime.Now - startTime) > timeout)
+                    return false;
+
+                System.Threading.Thread.Sleep(retryInterval);
+            }
+            this.Endpoints.Enqueue(endpoint);
+
+            return true;
         }
 
         protected abstract IEnumerable<TEndpoint> LoadEndpoints();

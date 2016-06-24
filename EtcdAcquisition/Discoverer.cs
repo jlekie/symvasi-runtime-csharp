@@ -25,12 +25,19 @@ namespace Symvasi.Runtime.Acquisition.Etcd
 
         protected override IEnumerable<TEndpoint> LoadEndpoints()
         {
-            var data = this.EtcdClient
+            var result = this.EtcdClient
                 .GetKey("/symvasi/endpoints/" + this.ServiceName)
-                .GetAwaiter().GetResult().Data.RawValue;
-            var encodedData = System.Text.Encoding.UTF8.GetBytes(data);
-            
-            return new TEndpoint[] { this.EndpointFactory.Load(encodedData) };
+                .GetAwaiter().GetResult().Data;
+
+            if (!result.IsDir)
+                throw new Exception(string.Format("Invalid key (not directory) '{0}'", "/symvasi/endpoints/" + this.ServiceName));
+
+            return result.Children.Select(child =>
+            {
+                var encodedData = System.Text.Encoding.UTF8.GetBytes(child.RawValue);
+
+                return this.EndpointFactory.Load(encodedData);
+            }).ToArray();
         }
     }
 }

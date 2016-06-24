@@ -6,14 +6,21 @@ using System.Threading.Tasks;
 
 namespace Symvasi.Runtime
 {
+    public struct SavedEndpoint
+    {
+        public string Id { get; set; }
+        public byte[] Data { get; set; }
+
+        public SavedEndpoint(string id, byte[] data)
+            : this()
+        {
+            this.Id = id;
+            this.Data = data;
+        }
+    }
+
     public interface IEndpoint
     {
-    }
-    public interface IServerEndpoint : IEndpoint
-    {
-        byte[] Save();
-    }
-    public interface IClientEndpoint : IEndpoint
-    {
+        SavedEndpoint Save();
     }
 }

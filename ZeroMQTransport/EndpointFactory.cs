@@ -6,9 +6,9 @@ using System.Threading.Tasks;
 
 namespace Symvasi.Runtime.Transport.ZeroMQ
 {
-    public class ZeroMQServerEndpointFactory : IEndpointFactory<IZeroMQServerEndpoint>
+    public class ZeroMQEndpointFactory : IEndpointFactory<IZeroMQEndpoint>
     {
-        public IZeroMQServerEndpoint Load(byte[] data)
+        public IZeroMQEndpoint Load(byte[] data)
         {
             var decodedData = System.Text.Encoding.UTF8.GetString(data);
 
@@ -17,24 +17,7 @@ namespace Symvasi.Runtime.Transport.ZeroMQ
             switch (facets[0])
             {
                 case "tcp":
-                    return TcpServerEndpoint.Load(facets);
-                default:
-                    throw new Exception(string.Format("Unknown endpoint type '{0}'", facets[0]));
-            }
-        }
-    }
-    public class ZeroMQClientEndpointFactory : IEndpointFactory<IZeroMQClientEndpoint>
-    {
-        public IZeroMQClientEndpoint Load(byte[] data)
-        {
-            var decodedData = System.Text.Encoding.UTF8.GetString(data);
-
-            var facets = decodedData.Split(new string[] { "|" }, StringSplitOptions.None);
-
-            switch (facets[0])
-            {
-                case "tcp":
-                    return TcpClientEndpoint.Load(facets);
+                    return TcpEndpoint.Load(facets);
                 default:
                     throw new Exception(string.Format("Unknown endpoint type '{0}'", facets[0]));
             }

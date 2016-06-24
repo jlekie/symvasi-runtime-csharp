@@ -8,7 +8,7 @@ using Draft;
 
 namespace Symvasi.Runtime.Acquisition.Etcd
 {
-    public class EtcdAnnouncer<TEndpoint> : AAnnouncer<TEndpoint> where TEndpoint : IServerEndpoint
+    public class EtcdAnnouncer<TEndpoint> : AAnnouncer<TEndpoint> where TEndpoint : IEndpoint
     {
         protected Draft.IEtcdClient EtcdClient { get; private set; }
 
@@ -20,11 +20,11 @@ namespace Symvasi.Runtime.Acquisition.Etcd
 
         protected override void Register()
         {
-            var data = this.Endpoint.Save();
-            var decodedData = System.Text.Encoding.UTF8.GetString(data);
+            var savedEndpoint = this.Endpoint.Save();
+            var decodedData = System.Text.Encoding.UTF8.GetString(savedEndpoint.Data);
 
-            this.EtcdClient.UpsertKey("/symvasi/endpoints/" + this.ServiceName)
-                .WithValue(decodedData).GetAwaiter().GetResult();
+            this.EtcdClient.UpsertKey(string.Format("/symvasi/endpoints/{0}/{1}", this.ServiceName, savedEndpoint.Id))
+                .WithValue(decodedData).WithTimeToLive(20).GetAwaiter().GetResult();
         }
     }
 }

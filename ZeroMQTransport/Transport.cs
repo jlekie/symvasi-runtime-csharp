@@ -14,11 +14,11 @@ namespace Symvasi.Runtime.Transport.ZeroMQ
 {
     public class ZeroMQServerTransport : AServerTransport
     {
-        public IZeroMQServerEndpoint ZeroMQEndpoint { get; private set; }
+        public IZeroMQEndpoint ZeroMQEndpoint { get; private set; }
 
         protected ResponseSocket Socket { get; private set; }
 
-        public ZeroMQServerTransport(IZeroMQServerEndpoint endpoint)
+        public ZeroMQServerTransport(IZeroMQEndpoint endpoint)
             : base(endpoint)
         {
             this.ZeroMQEndpoint = endpoint;
@@ -33,22 +33,36 @@ namespace Symvasi.Runtime.Transport.ZeroMQ
 
         public override void Send(byte[] data)
         {
-            this.Socket.SendFrame(data);
+            var message = new NetMQMessage();
+            message.Append(0);
+            message.AppendEmptyFrame();
+            message.Append(data);
+
+            this.Socket.SendMultipartMessage(message);
         }
         public override byte[] Receive()
         {
-            return this.Socket.ReceiveFrameBytes();
+            var message = this.Socket.ReceiveMultipartMessage(3);
+
+            var signal = message[0].ConvertToInt32();
+            if (signal != 0)
+            {
+                var errorMessage = message[2].ConvertToString(Encoding.UTF8);
+                throw new Exception(string.Format("Server responded with ({0}) '{1}'", signal, errorMessage));
+            }
+
+            return message[2].ToByteArray();
         }
     }
     public class ZeroMQRequestServerTransport : AServerTransport
     {
-        public IZeroMQServerEndpoint ZeroMQEndpoint { get; private set; }
+        public IZeroMQEndpoint ZeroMQEndpoint { get; private set; }
 
         protected RequestSocket Socket { get; private set; }
 
         private NetMQFrame ClientAddress { get; set; }
 
-        public ZeroMQRequestServerTransport(IZeroMQServerEndpoint endpoint)
+        public ZeroMQRequestServerTransport(IZeroMQEndpoint endpoint)
             : base(endpoint)
         {
             this.ZeroMQEndpoint = endpoint;
@@ -73,31 +87,36 @@ namespace Symvasi.Runtime.Transport.ZeroMQ
             var message = new NetMQMessage();
             message.Append(this.ClientAddress);
             message.AppendEmptyFrame();
+            message.Append(0);
+            message.AppendEmptyFrame();
             message.Append(data);
 
             this.Socket.SendMultipartMessage(message);
         }
         public override byte[] Receive()
         {
-            var message = this.Socket.ReceiveMultipartMessage();
-            if (message.FrameCount != 3)
-            {
-                throw new Exception("Invalid frame count");
-            }
+            var message = this.Socket.ReceiveMultipartMessage(5);
 
             this.ClientAddress = message[0];
 
-            return message[2].ToByteArray();
+            var signal = message[2].ConvertToInt32();
+            if (signal != 0)
+            {
+                var errorMessage = message[4].ConvertToString(Encoding.UTF8);
+                throw new Exception(string.Format("Server responded with ({0}) '{1}'", signal, errorMessage));
+            }
+
+            return message[4].ToByteArray();
         }
     }
 
     public class ZeroMQClientTransport : AClientTransport
     {
-        public IZeroMQClientEndpoint ZeroMQEndpoint { get; private set; }
+        public IZeroMQEndpoint ZeroMQEndpoint { get; private set; }
 
         protected RequestSocket Socket { get; private set; }
 
-        public ZeroMQClientTransport(IZeroMQClientEndpoint endpoint)
+        public ZeroMQClientTransport(IZeroMQEndpoint endpoint)
             : base(endpoint)
         {
             this.ZeroMQEndpoint = endpoint;
@@ -105,18 +124,32 @@ namespace Symvasi.Runtime.Transport.ZeroMQ
 
         public override void Connect()
         {
-            var connectionString = this.ZeroMQEndpoint.ToConnectionString();
+            var connectionString = this.ZeroMQEndpoint.ToClientConnectionString();
 
             this.Socket = new RequestSocket(connectionString);
         }
 
         public override void Send(byte[] data)
         {
-            this.Socket.SendFrame(data);
+            var message = new NetMQMessage();
+            message.Append(0);
+            message.AppendEmptyFrame();
+            message.Append(data);
+
+            this.Socket.SendMultipartMessage(message);
         }
         public override byte[] Receive()
         {
-            return this.Socket.ReceiveFrameBytes();
+            var message = this.Socket.ReceiveMultipartMessage(3);
+
+            var signal = message[0].ConvertToInt32();
+            if (signal != 0)
+            {
+                var errorMessage = message[2].ConvertToString(Encoding.UTF8);
+                throw new Exception(string.Format("Server responded with ({0}) '{1}'", signal, errorMessage));
+            }
+
+            return message[2].ToByteArray();
         }
     }
 }

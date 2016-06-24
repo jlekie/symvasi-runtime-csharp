@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace Symvasi.Runtime.Acquisition
 {
-    public interface IAnnouncer<TEndpoint> where TEndpoint : IServerEndpoint
+    public interface IAnnouncer<TEndpoint> where TEndpoint : IEndpoint
     {
         void Start();
         void Stop();
@@ -14,7 +14,7 @@ namespace Symvasi.Runtime.Acquisition
         void Refresh();
     }
 
-    public abstract class AAnnouncer<TEndpoint> : IAnnouncer<TEndpoint> where TEndpoint : IServerEndpoint
+    public abstract class AAnnouncer<TEndpoint> : IAnnouncer<TEndpoint> where TEndpoint : IEndpoint
     {
         public TEndpoint Endpoint { get; private set; }
         public string ServiceName { get; private set; }
@@ -29,8 +29,6 @@ namespace Symvasi.Runtime.Acquisition
 
         public void Start()
         {
-            this.Refresh();
-
             this.HandlerTask = Task.Factory.StartNew(() => this.Handler(), TaskCreationOptions.LongRunning);
         }
         public void Stop()
@@ -51,7 +49,7 @@ namespace Symvasi.Runtime.Acquisition
                 {
                     this.Refresh();
 
-                    System.Threading.Thread.Sleep(30000);
+                    System.Threading.Thread.Sleep(10000);
                 }
                 catch (Exception ex)
                 {
