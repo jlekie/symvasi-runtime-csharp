@@ -18,6 +18,8 @@ namespace Symvasi.Runtime.Transport.ZeroMQ
             {
                 case "tcp":
                     return TcpEndpoint.Load(facets);
+                case "inproc":
+                    return InprocEndpoint.Load(facets);
                 default:
                     throw new Exception(string.Format("Unknown endpoint type '{0}'", facets[0]));
             }

@@ -104,6 +104,77 @@ namespace Symvasi.Runtime.Transport.ZeroMQ
             }
         }
     }
+    public class InprocEndpoint : IZeroMQEndpoint
+    {
+        private static Dictionary<string, int> AddressRegistry = new Dictionary<string, int>();
+
+        internal static InprocEndpoint Load(string[] facets)
+        {
+            var address = facets[1];
+
+            return new InprocEndpoint(address);
+        }
+
+        public static InprocEndpoint Allocate(string address)
+        {
+            if (!AddressRegistry.ContainsKey(address))
+            {
+                AddressRegistry.Add(address, 1);
+            }
+
+            var index = AddressRegistry[address]++;
+
+            return new InprocEndpoint(address + "-" + index);
+        }
+
+        public string Address { get; private set; }
+        
+        public InprocEndpoint(string address)
+            : base()
+        {
+            this.Address = address;
+        }
+
+        public string ToServerConnectionString()
+        {
+            return string.Format("inproc://{0}", this.Address);
+        }
+        public string ToClientConnectionString()
+        {
+            return string.Format("inproc://{0}", this.Address);
+        }
+
+        public SavedEndpoint Save()
+        {
+            var decodedData = string.Format("{0}|{1}", "inproc", this.Address);
+
+            return new SavedEndpoint(string.Format("{0}:{1}", "tcp", this.Address), System.Text.Encoding.UTF8.GetBytes(decodedData));
+        }
+
+        public override bool Equals(object obj)
+        {
+            var compObj = obj as InprocEndpoint;
+            if (compObj != null)
+            {
+                return this.Address == compObj.Address;
+            }
+
+            return false;
+        }
+        public override int GetHashCode()
+        {
+            unchecked
+            {
+                const int HashingBase = (int)437272603;
+                const int HashingMultiplier = (int)7579769;
+
+                int hash = HashingBase;
+                hash = (hash * HashingMultiplier) ^ (this.Address != null ? this.Address.GetHashCode() : 0);
+
+                return hash;
+            }
+        }
+    }
     public class DiscoveryEndpoint : IZeroMQEndpoint
     {
         public IDiscoverer<ZeroMQEndpointFactory, IZeroMQEndpoint> Discoverer { get; private set; }
