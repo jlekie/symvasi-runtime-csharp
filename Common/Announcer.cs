@@ -4,6 +4,8 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
+using System.Collections.Concurrent;
+
 namespace Symvasi.Runtime.Acquisition
 {
     public interface IAnnouncer<TEndpoint> where TEndpoint : IEndpoint
@@ -59,5 +61,45 @@ namespace Symvasi.Runtime.Acquisition
         }
 
         protected abstract void Register();
+    }
+}
+
+namespace Symvasi.Runtime.Acquisition.Dictionary
+{
+    public class DictionaryAnnouncer<TEndpoint> : AAnnouncer<TEndpoint> where TEndpoint : IEndpoint
+    {
+        protected ConcurrentDictionary<string, Dictionary<string, string>> Registry { get; private set; }
+
+        public DictionaryAnnouncer(TEndpoint endpoint, string serviceName, ConcurrentDictionary<string, Dictionary<string, string>> registry)
+            : base(endpoint, serviceName)
+        {
+            this.Registry = registry;
+        }
+
+        protected override void Register()
+        {
+            var savedEndpoint = this.Endpoint.Save();
+            var decodedData = System.Text.Encoding.UTF8.GetString(savedEndpoint.Data);
+
+            this.Registry.AddOrUpdate(this.ServiceName, (serviceName) =>
+            {
+                var endpoints = new Dictionary<string, string>();
+                endpoints.Add(savedEndpoint.Id, decodedData);
+
+                return endpoints;
+            }, (serviceName, endpoints) =>
+            {
+                if (endpoints.ContainsKey(savedEndpoint.Id))
+                {
+                    endpoints[savedEndpoint.Id] = decodedData;
+                }
+                else
+                {
+                    endpoints.Add(savedEndpoint.Id, decodedData);
+                }
+
+                return endpoints;
+            });
+        }
     }
 }

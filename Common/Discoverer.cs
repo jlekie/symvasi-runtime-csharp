@@ -4,6 +4,8 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
+using System.Collections.Concurrent;
+
 namespace Symvasi.Runtime.Acquisition
 {
     public interface IDiscoverer<TEndpointFactory, TEndpoint>
@@ -115,5 +117,38 @@ namespace Symvasi.Runtime.Acquisition
         }
 
         protected abstract IEnumerable<TEndpoint> LoadEndpoints();
+    }
+}
+
+namespace Symvasi.Runtime.Acquisition.Dictionary
+{
+    public class DictionaryDiscoverer<TEndpointFactory, TEndpoint> : ADiscoverer<TEndpointFactory, TEndpoint>
+        where TEndpointFactory : IEndpointFactory<TEndpoint>, new()
+        where TEndpoint : IEndpoint
+    {
+        public string ServiceName { get; private set; }
+        protected ConcurrentDictionary<string, Dictionary<string, string>> Registry { get; private set; }
+
+        public DictionaryDiscoverer(string serviceName, ConcurrentDictionary<string, Dictionary<string, string>> registry)
+            : base()
+        {
+            this.ServiceName = serviceName;
+
+            this.Registry = registry;
+        }
+
+        protected override IEnumerable<TEndpoint> LoadEndpoints()
+        {
+            Dictionary<string, string> endpoints;
+            if (!this.Registry.TryGetValue(this.ServiceName, out endpoints))
+                return new TEndpoint[] { };
+
+            return endpoints.Values.Select(endpoint =>
+            {
+                var encodedData = System.Text.Encoding.UTF8.GetBytes(endpoint);
+
+                return this.EndpointFactory.Load(encodedData);
+            }).ToArray();
+        }
     }
 }
