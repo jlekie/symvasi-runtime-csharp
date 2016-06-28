@@ -4,6 +4,8 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
+using System.Runtime.Serialization;
+
 using Symvasi.Runtime.Protocol;
 
 namespace Symvasi.Runtime
@@ -16,6 +18,7 @@ namespace Symvasi.Runtime
         string[] GetProperties();
     }
 
+    [DataContract]
     public abstract class AModel : IModel
     {
         public virtual void Write(IProtocol protocol)
