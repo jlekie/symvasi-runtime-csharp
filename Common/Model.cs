@@ -18,8 +18,38 @@ namespace Symvasi.Runtime
         string[] GetProperties();
     }
 
-    [DataContract]
     public abstract class AModel : IModel
+    {
+        public virtual void Write(IProtocol protocol)
+        {
+        }
+
+        public void Read(IProtocol protocol, IModelHeader model)
+        {
+            for (var a = 0; a < model.PropertyCount; a++)
+            {
+                var prop = protocol.ReadModelPropertyStart();
+                if (!this.ReadPropertyValue(protocol, prop))
+                {
+                    throw new Exception("Property '" + prop.Name + "' not recognized");
+                }
+                protocol.ReadModelPropertyEnd();
+            }
+        }
+
+        protected virtual bool ReadPropertyValue(IProtocol protocol, IPropertyHeader prop)
+        {
+            return false;
+        }
+
+        protected void ValidateProp(IPropertyHeader prop, string type)
+        {
+        }
+
+        public abstract string[] GetProperties();
+    }
+    [DataContract]
+    public abstract class ADataContractModel : IModel
     {
         public virtual void Write(IProtocol protocol)
         {
