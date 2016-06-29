@@ -8,14 +8,17 @@ namespace Symvasi.Runtime.Transport
 {
     public interface ITransport
     {
-        event EventHandler<ReceivedEventArgs> Received;
-
         void Send(byte[] data);
         byte[] Receive();
     }
     public interface IServerTransport : ITransport
     {
+        event EventHandler<ReceivedEventArgs> Received;
+
         IEndpoint Endpoint { get; }
+
+        void Send(byte[] data, Guid schedulerId);
+        byte[] Receive(Guid schedulerId);
 
         void Listen();
     }
@@ -40,18 +43,19 @@ namespace Symvasi.Runtime.Transport
         public abstract void Listen();
 
         public abstract void Send(byte[] data);
-        public abstract byte[] Receive();
+        public abstract void Send(byte[] data, Guid schedulerId);
 
-        protected virtual void OnReceived(byte[] data)
+        public abstract byte[] Receive();
+        public abstract byte[] Receive(Guid schedulerId);
+
+        protected virtual void OnReceived()
         {
             if (this.Received != null)
-                this.Received(this, new ReceivedEventArgs(data));
+                this.Received(this, new ReceivedEventArgs());
         }
     }
     public abstract class AClientTransport : IClientTransport
     {
-        public event EventHandler<ReceivedEventArgs> Received;
-
         public IEndpoint Endpoint { get; private set; }
 
         public AClientTransport(IEndpoint endpoint)
@@ -63,22 +67,13 @@ namespace Symvasi.Runtime.Transport
 
         public abstract void Send(byte[] data);
         public abstract byte[] Receive();
-
-        protected virtual void OnReceived(byte[] data)
-        {
-            if (this.Received != null)
-                this.Received(this, new ReceivedEventArgs(data));
-        }
     }
 
     public class ReceivedEventArgs : EventArgs
     {
-        public byte[] Data { get; private set; }
-
-        public ReceivedEventArgs(byte[] data)
+        public ReceivedEventArgs()
             : base()
         {
-            this.Data = data;
         }
     }
 }
