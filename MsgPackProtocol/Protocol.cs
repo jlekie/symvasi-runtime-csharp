@@ -16,7 +16,7 @@ using Symvasi.Runtime.Transport;
 
 namespace Symvasi.Runtime.Protocol.MsgPack
 {
-    public class AMsgPackProtocol : IProtocol<ITransport>
+    public abstract class AMsgPackProtocol : IProtocol<ITransport>
     {
         public ITransport Transport { get; private set; }
 
@@ -41,7 +41,7 @@ namespace Symvasi.Runtime.Protocol.MsgPack
             this.WriteStream.Position = 0;
 
             var data = this.WriteStream.ToArray();
-            this.Transport.Send(data);
+            this.Send(data);
 
             this.WritePacker.Dispose();
             this.WritePacker = null;
@@ -52,7 +52,7 @@ namespace Symvasi.Runtime.Protocol.MsgPack
 
         protected void BeginRead()
         {
-            var data = this.Transport.Receive();
+            var data = this.Receive();
 
             this.ReadStream = new MemoryStream(data);
             this.ReadUnpacker = MessagePack.Unpacker.Create(this.ReadStream);
@@ -83,6 +83,10 @@ namespace Symvasi.Runtime.Protocol.MsgPack
             this.WritePacker.Pack(data);
         }
         protected void WriteDouble(double data)
+        {
+            this.WritePacker.Pack(data);
+        }
+        protected void WriteByte(byte data)
         {
             this.WritePacker.Pack(data);
         }
@@ -139,6 +143,16 @@ namespace Symvasi.Runtime.Protocol.MsgPack
         {
             double data;
             if (!this.ReadUnpacker.ReadDouble(out data))
+            {
+                throw new Exception("Invalid data");
+            }
+
+            return data;
+        }
+        protected byte ReadByte()
+        {
+            byte data;
+            if (!this.ReadUnpacker.ReadByte(out data))
             {
                 throw new Exception("Invalid data");
             }
@@ -222,6 +236,10 @@ namespace Symvasi.Runtime.Protocol.MsgPack
         {
             this.WriteDouble(value);
         }
+        public void WriteByteValue(byte value)
+        {
+            this.WriteByte(value);
+        }
         public void WriteEnumValue<T>(T value) where T : struct, IConvertible
         {
             this.WriteEnum(value);
@@ -304,6 +322,10 @@ namespace Symvasi.Runtime.Protocol.MsgPack
         {
             return this.ReadDouble();
         }
+        public byte ReadByteValue()
+        {
+            return this.ReadByte();
+        }
         public T ReadEnumValue<T>() where T : struct, IConvertible
         {
             return this.ReadEnum<T>();
@@ -329,13 +351,23 @@ namespace Symvasi.Runtime.Protocol.MsgPack
                 throw new Exception("Invalid message");
             }
         }
+
+        protected abstract void Send(byte[] data);
+        protected abstract byte[] Receive();
     }
 
     public class MsgPackServerProtocol : AMsgPackProtocol, IServerProtocol
     {
+        public Guid? SchedulerId { get; private set; }
+
         public MsgPackServerProtocol(IServerTransport transport)
             : base(transport)
         {
+        }
+        public MsgPackServerProtocol(IServerTransport transport, Guid scheduler)
+            : this(transport)
+        {
+            this.SchedulerId = scheduler;
         }
 
         public void WriteResponseStart(bool success)
@@ -405,6 +437,29 @@ namespace Symvasi.Runtime.Protocol.MsgPack
                 return (IServerTransport)base.Transport;
             }
         }
+
+        protected override void Send(byte[] data)
+        {
+            if (this.SchedulerId.HasValue)
+            {
+                this.Transport.Send(data, this.SchedulerId.Value);
+            }
+            else
+            {
+                this.Transport.Send(data);
+            }
+        }
+        protected override byte[] Receive()
+        {
+            if (this.SchedulerId.HasValue)
+            {
+                return this.Transport.Receive(this.SchedulerId.Value);
+            }
+            else
+            {
+                return this.Transport.Receive();
+            }
+        }
     }
 
     public class MsgPackClientProtocol : AMsgPackProtocol, IClientProtocol
@@ -469,6 +524,15 @@ namespace Symvasi.Runtime.Protocol.MsgPack
             {
                 return (IClientTransport)base.Transport;
             }
+        }
+
+        protected override void Send(byte[] data)
+        {
+            this.Transport.Send(data);
+        }
+        protected override byte[] Receive()
+        {
+            return this.Transport.Receive();
         }
     }
 }

@@ -25,6 +25,7 @@ namespace Symvasi.Runtime.Protocol
         void WriteIntegerValue(int value);
         void WriteFloatValue(float value);
         void WriteDoubleValue(double value);
+        void WriteByteValue(byte value);
         void WriteEnumValue<T>(T value) where T : struct, IConvertible;
 
         void WriteListStart(int itemCount);
@@ -47,6 +48,7 @@ namespace Symvasi.Runtime.Protocol
         int ReadIntegerValue();
         float ReadFloatValue();
         double ReadDoubleValue();
+        byte ReadByteValue();
         T ReadEnumValue<T>() where T : struct, IConvertible;
 
         IListHeader ReadListStart();
