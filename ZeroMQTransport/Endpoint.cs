@@ -65,11 +65,11 @@ namespace Symvasi.Runtime.Transport.ZeroMQ
 
         public string ToServerConnectionString()
         {
-            return string.Format("tcp://*:{0}", this.Port);
+            return string.Format("@tcp://*:{0}", this.Port);
         }
         public string ToClientConnectionString()
         {
-            return string.Format("tcp://{0}:{1}", this.Address, this.Port);
+            return string.Format(">tcp://{0}:{1}", this.Address, this.Port);
         }
 
         public SavedEndpoint Save()
@@ -137,11 +137,11 @@ namespace Symvasi.Runtime.Transport.ZeroMQ
 
         public string ToServerConnectionString()
         {
-            return string.Format("inproc://{0}", this.Address);
+            return string.Format("@inproc://{0}", this.Address);
         }
         public string ToClientConnectionString()
         {
-            return string.Format("inproc://{0}", this.Address);
+            return string.Format(">inproc://{0}", this.Address);
         }
 
         public SavedEndpoint Save()
