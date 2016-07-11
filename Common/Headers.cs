@@ -6,6 +6,19 @@ using System.Threading.Tasks;
 
 namespace Symvasi.Runtime.Protocol
 {
+    public enum IndefinateTypes
+    {
+        String = 0,
+        Boolean = 1,
+        Integer = 2,
+        Float = 3,
+        Double = 4,
+        Byte = 5,
+        Enum = 6,
+        Model = 7,
+        List = 8
+    }
+
     public interface IArgumentHeader
     {
         string Name { get; }
@@ -17,6 +30,11 @@ namespace Symvasi.Runtime.Protocol
     public interface IModelHeader
     {
         int PropertyCount { get; }
+    }
+    public interface IIndefinateHeader
+    {
+        IndefinateTypes Type { get; }
+        string DeclaredType { get; }
     }
     public interface IPropertyHeader
     {

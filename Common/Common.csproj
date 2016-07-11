@@ -45,6 +45,7 @@
     <Compile Include="EndpointFactory.cs" />
     <Compile Include="Endpoint.cs" />
     <Compile Include="Headers.cs" />
+    <Compile Include="Helpers.cs" />
     <Compile Include="ServiceDirector.cs" />
     <Compile Include="ServiceConsumer.cs" />
     <Compile Include="Model.cs" />

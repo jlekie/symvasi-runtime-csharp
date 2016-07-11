@@ -16,6 +16,30 @@ using Symvasi.Runtime.Transport;
 
 namespace Symvasi.Runtime.Protocol.MsgPack
 {
+    public enum HeaderCodes : byte
+    {
+        ReqStart = 0,
+        ReqEnd = 1,
+
+        ResStart = 2,
+        ResEnd = 3,
+
+        ReqArgStart = 4,
+        ReqArgEnd = 5,
+
+        ModelStart = 6,
+        ModelEnd = 7,
+
+        PropStart = 8,
+        PropEnd = 9,
+
+        ListStart = 10,
+        ListEnd = 11,
+
+        IndefinateStart = 12,
+        IndefinateEnd = 13
+    }
+
     public abstract class AMsgPackProtocol : IProtocol<ITransport>
     {
         public ITransport Transport { get; private set; }
@@ -66,6 +90,10 @@ namespace Symvasi.Runtime.Protocol.MsgPack
             this.ReadStream = null;
         }
 
+        protected void WriteHeaderCode(HeaderCodes headerCode)
+        {
+            this.WritePacker.Pack((byte)headerCode);
+        }
         protected void WriteString(string data)
         {
             this.WritePacker.PackString(data);
@@ -98,7 +126,21 @@ namespace Symvasi.Runtime.Protocol.MsgPack
         {
             data.GetSerializer().Pack(this.WriteStream, data);
         }
+        protected void WriteHeader<T>(T data) where T : IHeader
+        {
+            data.Write(this);
+        }
 
+        protected HeaderCodes ReadHeaderCode()
+        {
+            byte code;
+            if (!this.ReadUnpacker.ReadByte(out code))
+            {
+                throw new Exception("Invalid data");
+            }
+
+            return (HeaderCodes)code;
+        }
         protected string ReadString()
         {
             string data;
@@ -190,6 +232,13 @@ namespace Symvasi.Runtime.Protocol.MsgPack
                 throw new Exception("Invalid data", ex);
             }
         }
+        protected T ReadHeader<T>() where T : IHeader, new()
+        {
+            var result = new T();
+            result.Read(this);
+
+            return result;
+        }
 
         public void WriteError(Exception ex)
         {
@@ -198,22 +247,22 @@ namespace Symvasi.Runtime.Protocol.MsgPack
 
         public void WriteModelStart(string type, int propertyCount)
         {
-            this.WriteString("model");
-            this.WriteObject(new ModelHeader() { PropertyCount = propertyCount });
+            this.WriteHeaderCode(HeaderCodes.ModelStart);
+            this.WriteHeader(new ModelHeader() { PropertyCount = propertyCount });
         }
         public void WriteModelEnd()
         {
-            this.WriteString("/model");
+            this.WriteHeaderCode(HeaderCodes.ModelEnd);
         }
 
         public void WriteModelPropertyStart(string name, string type, bool isNull)
         {
-            this.WriteString("prop");
-            this.WriteObject(new PropertyHeader() { Name = name, IsNull = isNull });
+            this.WriteHeaderCode(HeaderCodes.PropStart);
+            this.WriteHeader(new PropertyHeader() { Name = name, IsNull = isNull });
         }
         public void WriteModelPropertyEnd()
         {
-            this.WriteString("/prop");
+            this.WriteHeaderCode(HeaderCodes.PropEnd);
         }
 
         public void WriteStringValue(string value)
@@ -247,12 +296,22 @@ namespace Symvasi.Runtime.Protocol.MsgPack
 
         public void WriteListStart(int itemCount)
         {
-            this.WriteString("list");
-            this.WriteObject(new ListHeader() { ItemCount = itemCount });
+            this.WriteHeaderCode(HeaderCodes.ListStart);
+            this.WriteHeader(new ListHeader() { ItemCount = itemCount });
         }
         public void WriteListEnd()
         {
-            this.WriteString("/list");
+            this.WriteHeaderCode(HeaderCodes.ListEnd);
+        }
+
+        public void WriteIndefinateStart(IndefinateTypes type, string declaredType = null)
+        {
+            this.WriteHeaderCode(HeaderCodes.IndefinateStart);
+            this.WriteHeader(new IndefinateHeader() { Type = type, DeclaredType = declaredType });
+        }
+        public void WriteIndefinateEnd()
+        {
+            this.WriteHeaderCode(HeaderCodes.IndefinateEnd);
         }
 
         public IError ReadError()
@@ -262,20 +321,18 @@ namespace Symvasi.Runtime.Protocol.MsgPack
 
         public IModelHeader ReadModelStart()
         {
-            string data = this.ReadString();
-
-            if (data != "model")
+            var header = this.ReadHeaderCode();
+            if (header != HeaderCodes.ModelStart)
             {
                 throw new Exception("Invalid message");
             }
 
-            return this.ReadObject(ModelHeader.Serializer);
+            return this.ReadHeader<ModelHeader>();
         }
         public void ReadModelEnd()
         {
-            string data = this.ReadString();
-
-            if (data != "/model")
+            var header = this.ReadHeaderCode();
+            if (header != HeaderCodes.ModelEnd)
             {
                 throw new Exception("Invalid message");
             }
@@ -283,20 +340,18 @@ namespace Symvasi.Runtime.Protocol.MsgPack
 
         public IPropertyHeader ReadModelPropertyStart()
         {
-            string data = this.ReadString();
-
-            if (data != "prop")
+            var header = this.ReadHeaderCode();
+            if (header != HeaderCodes.PropStart)
             {
                 throw new Exception("Invalid message");
             }
 
-            return this.ReadObject(PropertyHeader.Serializer);
+            return this.ReadHeader<PropertyHeader>();
         }
         public void ReadModelPropertyEnd()
         {
-            string data = this.ReadString();
-
-            if (data != "/prop")
+            var header = this.ReadHeaderCode();
+            if (header != HeaderCodes.PropEnd)
             {
                 throw new Exception("Invalid message");
             }
@@ -333,20 +388,37 @@ namespace Symvasi.Runtime.Protocol.MsgPack
 
         public IListHeader ReadListStart()
         {
-            string data = this.ReadString();
-
-            if (data != "list")
+            var header = this.ReadHeaderCode();
+            if (header != HeaderCodes.ListStart)
             {
                 throw new Exception("Invalid message");
             }
 
-            return this.ReadObject(ListHeader.Serializer);
+            return this.ReadHeader<ListHeader>();
         }
         public void ReadListEnd()
         {
-            string data = this.ReadString();
+            var header = this.ReadHeaderCode();
+            if (header != HeaderCodes.ListEnd)
+            {
+                throw new Exception("Invalid message");
+            }
+        }
 
-            if (data != "/list")
+        public IIndefinateHeader ReadIndefinateStart()
+        {
+            var header = this.ReadHeaderCode();
+            if (header != HeaderCodes.IndefinateStart)
+            {
+                throw new Exception("Invalid message");
+            }
+
+            return this.ReadHeader<IndefinateHeader>();
+        }
+        public void ReadIndefinateEnd()
+        {
+            var header = this.ReadHeaderCode();
+            if (header != HeaderCodes.IndefinateEnd)
             {
                 throw new Exception("Invalid message");
             }
@@ -374,12 +446,12 @@ namespace Symvasi.Runtime.Protocol.MsgPack
         {
             this.BeginWrite();
 
-            this.WriteString("res");
-            this.WriteObject(new ResponseHeader() { IsValid = success });
+            this.WriteHeaderCode(HeaderCodes.ResStart);
+            this.WriteHeader(new ResponseHeader() { IsValid = success });
         }
         public void WriteResponseEnd()
         {
-            this.WriteString("/res");
+            this.WriteHeaderCode(HeaderCodes.ResEnd);
 
             this.EndWrite();
         }
@@ -388,20 +460,18 @@ namespace Symvasi.Runtime.Protocol.MsgPack
         {
             this.BeginRead();
 
-            string data = this.ReadString();
-
-            if (data != "req")
+            var header = this.ReadHeaderCode();
+            if (header != HeaderCodes.ReqStart)
             {
                 throw new Exception("Invalid message");
             }
 
-            return this.ReadObject(RequestHeader.Serializer);
+            return this.ReadHeader<RequestHeader>();
         }
         public void ReadRequestEnd()
         {
-            string data = this.ReadString();
-
-            if (data != "/req")
+            var header = this.ReadHeaderCode();
+            if (header != HeaderCodes.ReqEnd)
             {
                 throw new Exception("Invalid message");
             }
@@ -411,20 +481,18 @@ namespace Symvasi.Runtime.Protocol.MsgPack
 
         public IArgumentHeader ReadRequestArgumentStart()
         {
-            string data = this.ReadString();
-
-            if (data != "arg")
+            var header = this.ReadHeaderCode();
+            if (header != HeaderCodes.ReqArgStart)
             {
                 throw new Exception("Invalid message");
             }
 
-            return this.ReadObject(ArgumentHeader.Serializer);
+            return this.ReadHeader<ArgumentHeader>();
         }
         public void ReadRequestArgumentEnd()
         {
-            string data = this.ReadString();
-
-            if (data != "/arg")
+            var header = this.ReadHeaderCode();
+            if (header != HeaderCodes.ReqArgEnd)
             {
                 throw new Exception("Invalid message");
             }
@@ -473,44 +541,42 @@ namespace Symvasi.Runtime.Protocol.MsgPack
         {
             this.BeginWrite();
 
-            this.WriteString("req");
-            this.WriteObject(new RequestHeader() { Method = methodName });
+            this.WriteHeaderCode(HeaderCodes.ReqStart);
+            this.WriteHeader(new RequestHeader() { Method = methodName });
         }
         public void WriteRequestEnd()
         {
-            this.WriteString("/req");
+            this.WriteHeaderCode(HeaderCodes.ReqEnd);
 
             this.EndWrite();
         }
 
         public void WriteRequestArgumentStart(string name, string type)
         {
-            this.WriteString("arg");
-            this.WriteObject(new ArgumentHeader() { Name = name });
+            this.WriteHeaderCode(HeaderCodes.ReqArgStart);
+            this.WriteHeader(new ArgumentHeader() { Name = name });
         }
         public void WriteRequestArgumentEnd()
         {
-            this.WriteString("/arg");
+            this.WriteHeaderCode(HeaderCodes.ReqArgEnd);
         }
 
         public IResponseHeader ReadResponseStart()
         {
             this.BeginRead();
 
-            string data = this.ReadString();
-
-            if (data != "res")
+            var header = this.ReadHeaderCode();
+            if (header != HeaderCodes.ResStart)
             {
                 throw new Exception("Invalid message");
             }
 
-            return this.ReadObject(ResponseHeader.Serializer);
+            return this.ReadHeader<ResponseHeader>();
         }
         public void ReadResponseEnd()
         {
-            string data = this.ReadString();
-
-            if (data != "/res")
+            var header = this.ReadHeaderCode();
+            if (header != HeaderCodes.ResEnd)
             {
                 throw new Exception("Invalid message");
             }

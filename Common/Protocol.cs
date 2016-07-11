@@ -31,6 +31,9 @@ namespace Symvasi.Runtime.Protocol
         void WriteListStart(int itemCount);
         void WriteListEnd();
 
+        void WriteIndefinateStart(IndefinateTypes type, string declaredType = null);
+        void WriteIndefinateEnd();
+
         #endregion
 
         #region Read Operations
@@ -53,6 +56,9 @@ namespace Symvasi.Runtime.Protocol
 
         IListHeader ReadListStart();
         void ReadListEnd();
+
+        IIndefinateHeader ReadIndefinateStart();
+        void ReadIndefinateEnd();
 
         #endregion
     }

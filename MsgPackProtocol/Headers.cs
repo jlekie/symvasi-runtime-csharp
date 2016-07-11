@@ -15,9 +15,14 @@ namespace Symvasi.Runtime.Protocol.MsgPack
     {
         MessagePackSerializer<T> GetSerializer();
     }
+    public interface IHeader
+    {
+        void Read(IProtocol protocol);
+        void Write(IProtocol protocol);
+    }
 
     [DataContract]
-    public class RequestHeader : IRequestHeader, IMsgPackSerializable<RequestHeader>
+    public class RequestHeader :  IRequestHeader, IHeader, IMsgPackSerializable<RequestHeader>
     {
         public static readonly MessagePackSerializer<RequestHeader> Serializer = MessagePackSerializer.Get<RequestHeader>(new SerializationContext() { SerializationMethod = SerializationMethod.Map });
 
@@ -30,9 +35,20 @@ namespace Symvasi.Runtime.Protocol.MsgPack
         {
             return RequestHeader.Serializer;
         }
+
+        public void Read(IProtocol protocol)
+        {
+            this.Method = protocol.ReadStringValue();
+            this.ArgumentCount = protocol.ReadIntegerValue();
+        }
+        public void Write(IProtocol protocol)
+        {
+            protocol.WriteStringValue(this.Method);
+            protocol.WriteIntegerValue(this.ArgumentCount);
+        }
     }
     [DataContract]
-    public class ResponseHeader : IResponseHeader, IMsgPackSerializable<ResponseHeader>
+    public class ResponseHeader : IResponseHeader, IHeader, IMsgPackSerializable<ResponseHeader>
     {
         public static readonly MessagePackSerializer<ResponseHeader> Serializer = MessagePackSerializer.Get<ResponseHeader>(new SerializationContext() { SerializationMethod = SerializationMethod.Map });
 
@@ -51,9 +67,20 @@ namespace Symvasi.Runtime.Protocol.MsgPack
         {
             return ResponseHeader.Serializer;
         }
+
+        public void Read(IProtocol protocol)
+        {
+            this.IsValid = protocol.ReadBoolValue();
+            this.Test = protocol.ReadStringValue();
+        }
+        public void Write(IProtocol protocol)
+        {
+            protocol.WriteBoolValue(this.IsValid);
+            protocol.WriteStringValue(this.Test);
+        }
     }
     [DataContract]
-    public class ArgumentHeader : IArgumentHeader, IMsgPackSerializable<ArgumentHeader>
+    public class ArgumentHeader : IArgumentHeader, IHeader, IMsgPackSerializable<ArgumentHeader>
     {
         public static readonly MessagePackSerializer<ArgumentHeader> Serializer = MessagePackSerializer.Get<ArgumentHeader>(new SerializationContext() { SerializationMethod = SerializationMethod.Map });
 
@@ -64,9 +91,18 @@ namespace Symvasi.Runtime.Protocol.MsgPack
         {
             return ArgumentHeader.Serializer;
         }
+
+        public void Read(IProtocol protocol)
+        {
+            this.Name = protocol.ReadStringValue();
+        }
+        public void Write(IProtocol protocol)
+        {
+            protocol.WriteStringValue(this.Name);
+        }
     }
     [DataContract]
-    public class ModelHeader : IModelHeader, IMsgPackSerializable<ModelHeader>
+    public class ModelHeader : IModelHeader, IHeader, IMsgPackSerializable<ModelHeader>
     {
         public static readonly MessagePackSerializer<ModelHeader> Serializer = MessagePackSerializer.Get<ModelHeader>(new SerializationContext() { SerializationMethod = SerializationMethod.Map });
 
@@ -77,9 +113,18 @@ namespace Symvasi.Runtime.Protocol.MsgPack
         {
             return ModelHeader.Serializer;
         }
+
+        public void Read(IProtocol protocol)
+        {
+            this.PropertyCount = protocol.ReadIntegerValue();
+        }
+        public void Write(IProtocol protocol)
+        {
+            protocol.WriteIntegerValue(this.PropertyCount);
+        }
     }
     [DataContract]
-    public class PropertyHeader : IPropertyHeader, IMsgPackSerializable<PropertyHeader>
+    public class PropertyHeader : IPropertyHeader, IHeader, IMsgPackSerializable<PropertyHeader>
     {
         public static readonly MessagePackSerializer<PropertyHeader> Serializer = MessagePackSerializer.Get<PropertyHeader>(new SerializationContext() { SerializationMethod = SerializationMethod.Map });
 
@@ -92,9 +137,20 @@ namespace Symvasi.Runtime.Protocol.MsgPack
         {
             return PropertyHeader.Serializer;
         }
+
+        public void Read(IProtocol protocol)
+        {
+            this.Name = protocol.ReadStringValue();
+            this.IsNull = protocol.ReadBoolValue();
+        }
+        public void Write(IProtocol protocol)
+        {
+            protocol.WriteStringValue(this.Name);
+            protocol.WriteBoolValue(this.IsNull);
+        }
     }
     [DataContract]
-    public class ListHeader : IListHeader, IMsgPackSerializable<ListHeader>
+    public class ListHeader : IListHeader, IHeader, IMsgPackSerializable<ListHeader>
     {
         public static readonly MessagePackSerializer<ListHeader> Serializer = MessagePackSerializer.Get<ListHeader>(new SerializationContext() { SerializationMethod = SerializationMethod.Map });
 
@@ -105,9 +161,44 @@ namespace Symvasi.Runtime.Protocol.MsgPack
         {
             return ListHeader.Serializer;
         }
+
+        public void Read(IProtocol protocol)
+        {
+            this.ItemCount = protocol.ReadIntegerValue();
+        }
+        public void Write(IProtocol protocol)
+        {
+            protocol.WriteIntegerValue(this.ItemCount);
+        }
     }
     [DataContract]
-    public class Error : IError, IMsgPackSerializable<Error>
+    public class IndefinateHeader : IIndefinateHeader, IHeader, IMsgPackSerializable<IndefinateHeader>
+    {
+        public static readonly MessagePackSerializer<IndefinateHeader> Serializer = MessagePackSerializer.Get<IndefinateHeader>(new SerializationContext() { SerializationMethod = SerializationMethod.Map });
+
+        [DataMember(Name = "type")]
+        public IndefinateTypes Type { get; set; }
+        [DataMember(Name = "declaredType")]
+        public string DeclaredType { get; set; }
+
+        public MessagePackSerializer<IndefinateHeader> GetSerializer()
+        {
+            return IndefinateHeader.Serializer;
+        }
+
+        public void Read(IProtocol protocol)
+        {
+            this.Type = protocol.ReadEnumValue<IndefinateTypes>();
+            this.DeclaredType = protocol.ReadStringValue();
+        }
+        public void Write(IProtocol protocol)
+        {
+            protocol.WriteEnumValue(this.Type);
+            protocol.WriteStringValue(this.DeclaredType);
+        }
+    }
+    [DataContract]
+    public class Error : IError, IHeader, IMsgPackSerializable<Error>
     {
         public static readonly MessagePackSerializer<Error> Serializer = MessagePackSerializer.Get<Error>(new SerializationContext() { SerializationMethod = SerializationMethod.Map });
 
@@ -130,6 +221,15 @@ namespace Symvasi.Runtime.Protocol.MsgPack
         public MessagePackSerializer<Error> GetSerializer()
         {
             return Error.Serializer;
+        }
+
+        public void Read(IProtocol protocol)
+        {
+            this.Message = protocol.ReadStringValue();
+        }
+        public void Write(IProtocol protocol)
+        {
+            protocol.WriteStringValue(this.Message);
         }
     }
 }
