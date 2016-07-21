@@ -133,81 +133,37 @@ namespace Symvasi.Runtime.Protocol.MsgPack
 
         protected HeaderCodes ReadHeaderCode()
         {
-            byte code;
-            if (!this.ReadUnpacker.ReadByte(out code))
-            {
-                throw new Exception("Invalid data");
-            }
+            byte code = this.ReadUnpacker.ReadItemData().AsByte();
 
             return (HeaderCodes)code;
         }
         protected string ReadString()
         {
-            string data;
-            if (!this.ReadUnpacker.ReadString(out data))
-            {
-                throw new Exception("Invalid data");
-            }
-
-            return data;
+            return this.ReadUnpacker.ReadItemData().AsString();
         }
         protected bool ReadBoolean()
         {
-            bool data;
-            if (!this.ReadUnpacker.ReadBoolean(out data))
-            {
-                throw new Exception("Invalid data");
-            }
-
-            return data;
+            return this.ReadUnpacker.ReadItemData().AsBoolean();
         }
         protected int ReadInteger()
         {
-            int data;
-            if (!this.ReadUnpacker.ReadInt32(out data))
-            {
-                throw new Exception("Invalid data");
-            }
-
-            return data;
+            return this.ReadUnpacker.ReadItemData().AsInt32();
         }
         protected float ReadFloat()
         {
-            float data;
-            if (!this.ReadUnpacker.ReadSingle(out data))
-            {
-                throw new Exception("Invalid data");
-            }
-
-            return data;
+            return this.ReadUnpacker.ReadItemData().AsSingle();
         }
         protected double ReadDouble()
         {
-            double data;
-            if (!this.ReadUnpacker.ReadDouble(out data))
-            {
-                throw new Exception("Invalid data");
-            }
-
-            return data;
+            return this.ReadUnpacker.ReadItemData().AsDouble();
         }
         protected byte ReadByte()
         {
-            byte data;
-            if (!this.ReadUnpacker.ReadByte(out data))
-            {
-                throw new Exception("Invalid data");
-            }
-
-            return data;
+            return this.ReadUnpacker.ReadItemData().AsByte();
         }
         protected T ReadEnum<T>() where T : struct, IConvertible
         {
-            int data;
-            if (!this.ReadUnpacker.ReadInt32(out data))
-            {
-                throw new Exception("Invalid data");
-            }
+            int data = this.ReadUnpacker.ReadItemData().AsInt32();
 
             T parsedEnum;
             try
