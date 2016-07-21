@@ -189,12 +189,26 @@ namespace Symvasi.Runtime.Protocol.MsgPack
         public void Read(IProtocol protocol)
         {
             this.Type = protocol.ReadEnumValue<IndefinateTypes>();
-            this.DeclaredType = protocol.ReadStringValue();
+
+            switch (this.Type)
+            {
+                case IndefinateTypes.Enum:
+                case IndefinateTypes.Model:
+                    this.DeclaredType = protocol.ReadStringValue();
+                    break;
+            }
         }
         public void Write(IProtocol protocol)
         {
             protocol.WriteEnumValue(this.Type);
-            protocol.WriteStringValue(this.DeclaredType);
+
+            switch (this.Type)
+            {
+                case IndefinateTypes.Enum:
+                case IndefinateTypes.Model:
+                    protocol.WriteStringValue(this.DeclaredType);
+                    break;
+            }
         }
     }
     [DataContract]
