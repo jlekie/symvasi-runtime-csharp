@@ -31,6 +31,8 @@ namespace Symvasi.Runtime.Acquisition
 
         public void Start()
         {
+            this.Refresh();
+
             this.HandlerTask = Task.Factory.StartNew(() => this.Handler(), TaskCreationOptions.LongRunning);
         }
         public void Stop()
