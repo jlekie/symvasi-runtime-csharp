@@ -16,6 +16,11 @@ namespace Symvasi.Runtime
         void Read(IProtocol protocol, IModelHeader model);
 
         string[] GetProperties();
+        string[] GetProperties(string contractName);
+
+        object GetPropertyValue(string propertyName);
+
+        void SetPropertyValue(string propertyName, object value);
     }
 
     public abstract class AModel : IModel
@@ -47,6 +52,11 @@ namespace Symvasi.Runtime
         }
 
         public abstract string[] GetProperties();
+        public abstract string[] GetProperties(string contractName);
+
+        public abstract object GetPropertyValue(string propertyName);
+
+        public abstract void SetPropertyValue(string propertyName, object value);
     }
     [DataContract]
     public abstract class ADataContractModel : IModel
@@ -78,5 +88,10 @@ namespace Symvasi.Runtime
         }
 
         public abstract string[] GetProperties();
+        public abstract string[] GetProperties(string contractName);
+
+        public abstract object GetPropertyValue(string propertyName);
+
+        public abstract void SetPropertyValue(string propertyName, object value);
     }
 }
