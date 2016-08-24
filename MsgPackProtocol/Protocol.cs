@@ -16,67 +16,26 @@ using Symvasi.Runtime.Transport;
 
 namespace Symvasi.Runtime.Protocol.MsgPack
 {
-    public enum HeaderCodes : byte
+    public interface IMsgPackProtocol : IProtocol
     {
-        ReqStart = 0,
-        ReqEnd = 1,
-
-        ResStart = 2,
-        ResEnd = 3,
-
-        ReqArgStart = 4,
-        ReqArgEnd = 5,
-
-        ModelStart = 6,
-        ModelEnd = 7,
-
-        PropStart = 8,
-        PropEnd = 9,
-
-        ListStart = 10,
-        ListEnd = 11,
-
-        IndefinateStart = 12,
-        IndefinateEnd = 13
     }
 
-    public abstract class AMsgPackProtocol : IProtocol<ITransport>
+    public class MsgPackProtocol : AProtocol, IMsgPackProtocol
     {
-        public ITransport Transport { get; private set; }
+        private MemoryStream WriteStream { get; set; }
+        private MessagePack.Packer WritePacker { get; set; }
 
-        protected MemoryStream WriteStream { get; private set; }
-        protected MessagePack.Packer WritePacker { get; private set; }
+        private MemoryStream ReadStream { get; set; }
+        private MessagePack.Unpacker ReadUnpacker { get; set; }
 
-        protected MemoryStream ReadStream { get; private set; }
-        protected MessagePack.Unpacker ReadUnpacker { get; private set; }
-
-        public AMsgPackProtocol(ITransport transport)
+        public MsgPackProtocol(ITransport transport)
+            : base(transport)
         {
-            this.Transport = transport;
         }
 
-        protected void BeginWrite()
+        protected async Task BeginRead()
         {
-            this.WriteStream = new MemoryStream();
-            this.WritePacker = MessagePack.Packer.Create(this.WriteStream);
-        }
-        protected void EndWrite()
-        {
-            this.WriteStream.Position = 0;
-
-            var data = this.WriteStream.ToArray();
-            this.Send(data);
-
-            this.WritePacker.Dispose();
-            this.WritePacker = null;
-
-            this.WriteStream.Dispose();
-            this.WriteStream = null;
-        }
-
-        protected void BeginRead()
-        {
-            var data = this.Receive();
+            var data = await this.Transport.Receive();
 
             this.ReadStream = new MemoryStream(data);
             this.ReadUnpacker = MessagePack.Unpacker.Create(this.ReadStream);
@@ -90,10 +49,40 @@ namespace Symvasi.Runtime.Protocol.MsgPack
             this.ReadStream = null;
         }
 
-        protected void WriteHeaderCode(HeaderCodes headerCode)
+        protected void BeginWrite()
         {
-            this.WritePacker.Pack((byte)headerCode);
+            this.WriteStream = new MemoryStream();
+            this.WritePacker = MessagePack.Packer.Create(this.WriteStream);
         }
+        protected async Task EndWrite()
+        {
+            this.WriteStream.Position = 0;
+
+            var data = this.WriteStream.ToArray();
+            await this.Transport.Send(data);
+
+            this.WritePacker.Dispose();
+            this.WritePacker = null;
+
+            this.WriteStream.Dispose();
+            this.WriteStream = null;
+        }
+
+        public override async Task<T> ReadData<T>(Func<T> reader)
+        {
+            await this.BeginRead();
+            var result = reader();
+            this.EndRead();
+
+            return result;
+        }
+        public override async Task WriteData(Action writer)
+        {
+            this.BeginWrite();
+            writer();
+            await this.EndWrite();
+        }
+
         protected void WriteString(string data)
         {
             this.WritePacker.PackString(data);
@@ -122,21 +111,15 @@ namespace Symvasi.Runtime.Protocol.MsgPack
         {
             this.WritePacker.Pack(data.ToInt32(System.Globalization.CultureInfo.InvariantCulture));
         }
-        protected void WriteObject<T>(T data) where T : IMsgPackSerializable<T>
+        protected void WriteHeaderCode(HeaderCodes headerCode)
         {
-            data.GetSerializer().Pack(this.WriteStream, data);
+            this.WritePacker.Pack((byte)headerCode);
         }
         protected void WriteHeader<T>(T data) where T : IHeader
         {
             data.Write(this);
         }
 
-        protected HeaderCodes ReadHeaderCode()
-        {
-            byte code = this.ReadUnpacker.ReadItemData().AsByte();
-
-            return (HeaderCodes)code;
-        }
         protected string ReadString()
         {
             return this.ReadUnpacker.ReadItemData().AsString();
@@ -177,16 +160,11 @@ namespace Symvasi.Runtime.Protocol.MsgPack
 
             return parsedEnum;
         }
-        protected T ReadObject<T>(MessagePackSerializer<T> serializer)
+        protected HeaderCodes ReadHeaderCode()
         {
-            try
-            {
-                return serializer.Unpack(this.ReadStream);
-            }
-            catch (Exception ex)
-            {
-                throw new Exception("Invalid data", ex);
-            }
+            byte code = this.ReadUnpacker.ReadItemData().AsByte();
+
+            return (HeaderCodes)code;
         }
         protected T ReadHeader<T>() where T : IHeader, new()
         {
@@ -196,86 +174,101 @@ namespace Symvasi.Runtime.Protocol.MsgPack
             return result;
         }
 
-        public void WriteError(Exception ex)
+        public override void WriteError(Exception ex)
         {
-            this.WriteObject(new Error(ex));
+            this.WriteHeader(new ErrorHeader(ex));
         }
 
-        public void WriteModelStart(string type, int propertyCount)
+        public override void WriteModelStart(int propertyCount)
         {
             this.WriteHeaderCode(HeaderCodes.ModelStart);
-            this.WriteHeader(new ModelHeader() { PropertyCount = propertyCount });
+            this.WriteHeader(new ModelHeader(propertyCount));
         }
-        public void WriteModelEnd()
+        public override void WriteAbstractModelStart(int propertyCount, string derivedModelName)
+        {
+            this.WriteHeaderCode(HeaderCodes.ModelStart);
+            this.WriteHeader(new AbstractModelHeader(propertyCount, derivedModelName));
+        }
+        public override void WriteModelEnd()
         {
             this.WriteHeaderCode(HeaderCodes.ModelEnd);
         }
 
-        public void WriteModelPropertyStart(string name, string type, bool isNull)
+        public override void WriteModelPropertyStart(string name, string type, bool isNull)
         {
             this.WriteHeaderCode(HeaderCodes.PropStart);
-            this.WriteHeader(new PropertyHeader() { Name = name, IsNull = isNull });
+            this.WriteHeader(new PropertyHeader(name, isNull));
         }
-        public void WriteModelPropertyEnd()
+        public override void WriteModelPropertyEnd()
         {
             this.WriteHeaderCode(HeaderCodes.PropEnd);
         }
 
-        public void WriteStringValue(string value)
+        public override void WriteStringValue(string value)
         {
             this.WriteString(value);
         }
-        public void WriteBoolValue(bool value)
+        public override void WriteBoolValue(bool value)
         {
             this.WriteBoolean(value);
         }
-        public void WriteIntegerValue(int value)
+        public override void WriteIntegerValue(int value)
         {
             this.WriteInteger(value);
         }
-        public void WriteFloatValue(float value)
+        public override void WriteFloatValue(float value)
         {
             this.WriteFloat(value);
         }
-        public void WriteDoubleValue(double value)
+        public override void WriteDoubleValue(double value)
         {
             this.WriteDouble(value);
         }
-        public void WriteByteValue(byte value)
+        public override void WriteByteValue(byte value)
         {
             this.WriteByte(value);
         }
-        public void WriteEnumValue<T>(T value) where T : struct, IConvertible
+        public override void WriteEnumValue<T>(T value)
         {
             this.WriteEnum(value);
         }
 
-        public void WriteListStart(int itemCount)
+        public override void WriteListStart(int itemCount)
         {
             this.WriteHeaderCode(HeaderCodes.ListStart);
-            this.WriteHeader(new ListHeader() { ItemCount = itemCount });
+            this.WriteHeader(new ListHeader(itemCount));
         }
-        public void WriteListEnd()
+        public override void WriteListEnd()
         {
             this.WriteHeaderCode(HeaderCodes.ListEnd);
         }
 
-        public void WriteIndefinateStart(IndefinateTypes type, string declaredType = null)
+        public override void WriteMapStart(int itemCount)
+        {
+            this.WriteHeaderCode(HeaderCodes.MapStart);
+            this.WriteHeader(new MapHeader(itemCount));
+        }
+        public override void WriteMapEnd()
+        {
+            this.WriteHeaderCode(HeaderCodes.MapEnd);
+        }
+
+        public override void WriteIndefinateStart(IndefinateTypes type, string declaredType = null)
         {
             this.WriteHeaderCode(HeaderCodes.IndefinateStart);
-            this.WriteHeader(new IndefinateHeader() { Type = type, DeclaredType = declaredType });
+            this.WriteHeader(new IndefinateHeader(type, declaredType));
         }
-        public void WriteIndefinateEnd()
+        public override void WriteIndefinateEnd()
         {
             this.WriteHeaderCode(HeaderCodes.IndefinateEnd);
         }
 
-        public IError ReadError()
+        public override IErrorHeader ReadError()
         {
-            return this.ReadObject(Error.Serializer);
+            return this.ReadHeader<ErrorHeader>();
         }
 
-        public IModelHeader ReadModelStart()
+        public override IModelHeader ReadModelStart()
         {
             var header = this.ReadHeaderCode();
             if (header != HeaderCodes.ModelStart)
@@ -285,7 +278,17 @@ namespace Symvasi.Runtime.Protocol.MsgPack
 
             return this.ReadHeader<ModelHeader>();
         }
-        public void ReadModelEnd()
+        public override IAbstractModelHeader ReadAbstractModelStart()
+        {
+            var header = this.ReadHeaderCode();
+            if (header != HeaderCodes.ModelStart)
+            {
+                throw new Exception("Invalid message");
+            }
+
+            return this.ReadHeader<AbstractModelHeader>();
+        }
+        public override void ReadModelEnd()
         {
             var header = this.ReadHeaderCode();
             if (header != HeaderCodes.ModelEnd)
@@ -294,7 +297,7 @@ namespace Symvasi.Runtime.Protocol.MsgPack
             }
         }
 
-        public IPropertyHeader ReadModelPropertyStart()
+        public override IPropertyHeader ReadModelPropertyStart()
         {
             var header = this.ReadHeaderCode();
             if (header != HeaderCodes.PropStart)
@@ -304,7 +307,7 @@ namespace Symvasi.Runtime.Protocol.MsgPack
 
             return this.ReadHeader<PropertyHeader>();
         }
-        public void ReadModelPropertyEnd()
+        public override void ReadModelPropertyEnd()
         {
             var header = this.ReadHeaderCode();
             if (header != HeaderCodes.PropEnd)
@@ -313,36 +316,36 @@ namespace Symvasi.Runtime.Protocol.MsgPack
             }
         }
 
-        public string ReadStringValue()
+        public override string ReadStringValue()
         {
             return this.ReadString();
         }
-        public bool ReadBoolValue()
+        public override bool ReadBoolValue()
         {
             return this.ReadBoolean();
         }
-        public int ReadIntegerValue()
+        public override int ReadIntegerValue()
         {
             return this.ReadInteger();
         }
-        public float ReadFloatValue()
+        public override float ReadFloatValue()
         {
             return this.ReadFloat();
         }
-        public double ReadDoubleValue()
+        public override double ReadDoubleValue()
         {
             return this.ReadDouble();
         }
-        public byte ReadByteValue()
+        public override byte ReadByteValue()
         {
             return this.ReadByte();
         }
-        public T ReadEnumValue<T>() where T : struct, IConvertible
+        public override T ReadEnumValue<T>()
         {
             return this.ReadEnum<T>();
         }
 
-        public IListHeader ReadListStart()
+        public override IListHeader ReadListStart()
         {
             var header = this.ReadHeaderCode();
             if (header != HeaderCodes.ListStart)
@@ -352,7 +355,7 @@ namespace Symvasi.Runtime.Protocol.MsgPack
 
             return this.ReadHeader<ListHeader>();
         }
-        public void ReadListEnd()
+        public override void ReadListEnd()
         {
             var header = this.ReadHeaderCode();
             if (header != HeaderCodes.ListEnd)
@@ -361,7 +364,26 @@ namespace Symvasi.Runtime.Protocol.MsgPack
             }
         }
 
-        public IIndefinateHeader ReadIndefinateStart()
+        public override IMapHeader ReadMapStart()
+        {
+            var header = this.ReadHeaderCode();
+            if (header != HeaderCodes.MapStart)
+            {
+                throw new Exception("Invalid message");
+            }
+
+            return this.ReadHeader<MapHeader>();
+        }
+        public override void ReadMapEnd()
+        {
+            var header = this.ReadHeaderCode();
+            if (header != HeaderCodes.MapEnd)
+            {
+                throw new Exception("Invalid message");
+            }
+        }
+
+        public override IIndefinateHeader ReadIndefinateStart()
         {
             var header = this.ReadHeaderCode();
             if (header != HeaderCodes.IndefinateStart)
@@ -371,7 +393,7 @@ namespace Symvasi.Runtime.Protocol.MsgPack
 
             return this.ReadHeader<IndefinateHeader>();
         }
-        public void ReadIndefinateEnd()
+        public override void ReadIndefinateEnd()
         {
             var header = this.ReadHeaderCode();
             if (header != HeaderCodes.IndefinateEnd)
@@ -380,42 +402,18 @@ namespace Symvasi.Runtime.Protocol.MsgPack
             }
         }
 
-        protected abstract void Send(byte[] data);
-        protected abstract byte[] Receive();
-    }
-
-    public class MsgPackServerProtocol : AMsgPackProtocol, IServerProtocol
-    {
-        public Guid? SchedulerId { get; private set; }
-
-        public MsgPackServerProtocol(IServerTransport transport)
-            : base(transport)
+        public override void WriteResponseStart(bool success)
         {
-        }
-        public MsgPackServerProtocol(IServerTransport transport, Guid scheduler)
-            : this(transport)
-        {
-            this.SchedulerId = scheduler;
-        }
-
-        public void WriteResponseStart(bool success)
-        {
-            this.BeginWrite();
-
             this.WriteHeaderCode(HeaderCodes.ResStart);
-            this.WriteHeader(new ResponseHeader() { IsValid = success });
+            this.WriteHeader(new ResponseHeader(success));
         }
-        public void WriteResponseEnd()
+        public override void WriteResponseEnd()
         {
             this.WriteHeaderCode(HeaderCodes.ResEnd);
-
-            this.EndWrite();
         }
 
-        public IRequestHeader ReadRequestStart()
+        public override IRequestHeader ReadRequestStart()
         {
-            this.BeginRead();
-
             var header = this.ReadHeaderCode();
             if (header != HeaderCodes.ReqStart)
             {
@@ -424,18 +422,16 @@ namespace Symvasi.Runtime.Protocol.MsgPack
 
             return this.ReadHeader<RequestHeader>();
         }
-        public void ReadRequestEnd()
+        public override void ReadRequestEnd()
         {
             var header = this.ReadHeaderCode();
             if (header != HeaderCodes.ReqEnd)
             {
                 throw new Exception("Invalid message");
             }
-
-            this.EndRead();
         }
 
-        public IArgumentHeader ReadRequestArgumentStart()
+        public override IArgumentHeader ReadRequestArgumentStart()
         {
             var header = this.ReadHeaderCode();
             if (header != HeaderCodes.ReqArgStart)
@@ -445,7 +441,7 @@ namespace Symvasi.Runtime.Protocol.MsgPack
 
             return this.ReadHeader<ArgumentHeader>();
         }
-        public void ReadRequestArgumentEnd()
+        public override void ReadRequestArgumentEnd()
         {
             var header = this.ReadHeaderCode();
             if (header != HeaderCodes.ReqArgEnd)
@@ -454,73 +450,28 @@ namespace Symvasi.Runtime.Protocol.MsgPack
             }
         }
 
-        public new IServerTransport Transport
+        public override void WriteRequestStart(string methodName, int argumentCount, IDictionary<string, string> tags = null)
         {
-            get
-            {
-                return (IServerTransport)base.Transport;
-            }
-        }
-
-        protected override void Send(byte[] data)
-        {
-            if (this.SchedulerId.HasValue)
-            {
-                this.Transport.Send(data, this.SchedulerId.Value);
-            }
-            else
-            {
-                this.Transport.Send(data);
-            }
-        }
-        protected override byte[] Receive()
-        {
-            if (this.SchedulerId.HasValue)
-            {
-                return this.Transport.Receive(this.SchedulerId.Value);
-            }
-            else
-            {
-                return this.Transport.Receive();
-            }
-        }
-    }
-
-    public class MsgPackClientProtocol : AMsgPackProtocol, IClientProtocol
-    {
-        public MsgPackClientProtocol(IClientTransport transport)
-            : base(transport)
-        {
-        }
-
-        public void WriteRequestStart(string methodName)
-        {
-            this.BeginWrite();
-
             this.WriteHeaderCode(HeaderCodes.ReqStart);
-            this.WriteHeader(new RequestHeader() { Method = methodName });
+            this.WriteHeader(new RequestHeader(methodName, argumentCount, tags));
         }
-        public void WriteRequestEnd()
+        public override void WriteRequestEnd()
         {
             this.WriteHeaderCode(HeaderCodes.ReqEnd);
-
-            this.EndWrite();
         }
 
-        public void WriteRequestArgumentStart(string name, string type)
+        public override void WriteRequestArgumentStart(string name, string type)
         {
             this.WriteHeaderCode(HeaderCodes.ReqArgStart);
-            this.WriteHeader(new ArgumentHeader() { Name = name });
+            this.WriteHeader(new ArgumentHeader(name));
         }
-        public void WriteRequestArgumentEnd()
+        public override void WriteRequestArgumentEnd()
         {
             this.WriteHeaderCode(HeaderCodes.ReqArgEnd);
         }
 
-        public IResponseHeader ReadResponseStart()
+        public override IResponseHeader ReadResponseStart()
         {
-            this.BeginRead();
-
             var header = this.ReadHeaderCode();
             if (header != HeaderCodes.ResStart)
             {
@@ -529,32 +480,194 @@ namespace Symvasi.Runtime.Protocol.MsgPack
 
             return this.ReadHeader<ResponseHeader>();
         }
-        public void ReadResponseEnd()
+        public override void ReadResponseEnd()
         {
             var header = this.ReadHeaderCode();
             if (header != HeaderCodes.ResEnd)
             {
                 throw new Exception("Invalid message");
             }
-
-            this.EndRead();
-        }
-
-        public new IClientTransport Transport
-        {
-            get
-            {
-                return (IClientTransport)base.Transport;
-            }
-        }
-
-        protected override void Send(byte[] data)
-        {
-            this.Transport.Send(data);
-        }
-        protected override byte[] Receive()
-        {
-            return this.Transport.Receive();
         }
     }
+
+    //public class MsgPackServerProtocol : AMsgPackProtocol, IServerProtocol
+    //{
+    //    public Guid? SchedulerId { get; private set; }
+
+    //    public MsgPackServerProtocol(IServerTransport transport)
+    //        : base(transport)
+    //    {
+    //    }
+    //    public MsgPackServerProtocol(IServerTransport transport, Guid scheduler)
+    //        : this(transport)
+    //    {
+    //        this.SchedulerId = scheduler;
+    //    }
+
+    //    public void WriteResponseStart(bool success)
+    //    {
+    //        this.BeginWrite();
+
+    //        this.WriteHeaderCode(HeaderCodes.ResStart);
+    //        this.WriteHeader(new ResponseHeader() { IsValid = success });
+    //    }
+    //    public void WriteResponseEnd()
+    //    {
+    //        this.WriteHeaderCode(HeaderCodes.ResEnd);
+
+    //        this.EndWrite();
+    //    }
+
+    //    public IRequestHeader ReadRequestStart()
+    //    {
+    //        this.BeginRead();
+
+    //        var header = this.ReadHeaderCode();
+    //        if (header != HeaderCodes.ReqStart)
+    //        {
+    //            throw new Exception("Invalid message");
+    //        }
+
+    //        return this.ReadHeader<RequestHeader>();
+    //    }
+    //    public void ReadRequestEnd()
+    //    {
+    //        var header = this.ReadHeaderCode();
+    //        if (header != HeaderCodes.ReqEnd)
+    //        {
+    //            throw new Exception("Invalid message");
+    //        }
+
+    //        this.EndRead();
+    //    }
+
+    //    public IArgumentHeader ReadRequestArgumentStart()
+    //    {
+    //        var header = this.ReadHeaderCode();
+    //        if (header != HeaderCodes.ReqArgStart)
+    //        {
+    //            throw new Exception("Invalid message");
+    //        }
+
+    //        return this.ReadHeader<ArgumentHeader>();
+    //    }
+    //    public void ReadRequestArgumentEnd()
+    //    {
+    //        var header = this.ReadHeaderCode();
+    //        if (header != HeaderCodes.ReqArgEnd)
+    //        {
+    //            throw new Exception("Invalid message");
+    //        }
+    //    }
+
+    //    public new IServerTransport Transport
+    //    {
+    //        get
+    //        {
+    //            return (IServerTransport)base.Transport;
+    //        }
+    //    }
+
+    //    protected override void Send(byte[] data)
+    //    {
+    //        if (this.SchedulerId.HasValue)
+    //        {
+    //            this.Transport.Send(data, this.SchedulerId.Value);
+    //        }
+    //        else
+    //        {
+    //            this.Transport.Send(data);
+    //        }
+    //    }
+    //    protected override byte[] Receive()
+    //    {
+    //        if (this.SchedulerId.HasValue)
+    //        {
+    //            return this.Transport.Receive(this.SchedulerId.Value);
+    //        }
+    //        else
+    //        {
+    //            return this.Transport.Receive();
+    //        }
+    //    }
+    //}
+
+    //public class MsgPackClientProtocol : AMsgPackProtocol, IClientProtocol
+    //{
+    //    public MsgPackClientProtocol(IClientTransport transport)
+    //        : base(transport)
+    //    {
+    //    }
+
+    //    public void WriteRequestStart(string methodName, int argumentCount, IDictionary<string, string> tags = null)
+    //    {
+    //        this.BeginWrite();
+
+    //        this.WriteHeaderCode(HeaderCodes.ReqStart);
+
+    //        var header = new RequestHeader() { Method = methodName, ArgumentCount = argumentCount };
+    //        if (tags != null)
+    //        {
+    //            foreach (var tag in tags)
+    //                header.Tags.Add(tag.Key, tag.Value);
+    //        }
+    //        this.WriteHeader(header);
+    //    }
+    //    public void WriteRequestEnd()
+    //    {
+    //        this.WriteHeaderCode(HeaderCodes.ReqEnd);
+
+    //        this.EndWrite();
+    //    }
+
+    //    public void WriteRequestArgumentStart(string name, string type)
+    //    {
+    //        this.WriteHeaderCode(HeaderCodes.ReqArgStart);
+    //        this.WriteHeader(new ArgumentHeader() { Name = name });
+    //    }
+    //    public void WriteRequestArgumentEnd()
+    //    {
+    //        this.WriteHeaderCode(HeaderCodes.ReqArgEnd);
+    //    }
+
+    //    public IResponseHeader ReadResponseStart()
+    //    {
+    //        this.BeginRead();
+
+    //        var header = this.ReadHeaderCode();
+    //        if (header != HeaderCodes.ResStart)
+    //        {
+    //            throw new Exception("Invalid message");
+    //        }
+
+    //        return this.ReadHeader<ResponseHeader>();
+    //    }
+    //    public void ReadResponseEnd()
+    //    {
+    //        var header = this.ReadHeaderCode();
+    //        if (header != HeaderCodes.ResEnd)
+    //        {
+    //            throw new Exception("Invalid message");
+    //        }
+
+    //        this.EndRead();
+    //    }
+
+    //    public new IClientTransport Transport
+    //    {
+    //        get
+    //        {
+    //            return (IClientTransport)base.Transport;
+    //        }
+    //    }
+
+    //    protected override void Send(byte[] data)
+    //    {
+    //        this.Transport.Send(data);
+    //    }
+    //    protected override byte[] Receive()
+    //    {
+    //        return this.Transport.Receive();
+    //    }
+    //}
 }
