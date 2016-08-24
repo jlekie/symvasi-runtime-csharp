@@ -13,8 +13,23 @@ namespace Symvasi.Runtime.Transport.ZeroMQ
         string ToServerConnectionString();
         string ToClientConnectionString();
     }
+    public interface ITcpEndpoint : IZeroMQEndpoint
+    {
+        string Address { get; }
+        int Port { get; }
+    }
+    public interface IInprocEndpoint : IZeroMQEndpoint
+    {
+        string Address { get; }
+    }
 
-    public class TcpEndpoint : IZeroMQEndpoint
+    public abstract class AZeroMQEndpoint : AEndpoint, IZeroMQEndpoint
+    {
+        public abstract string ToServerConnectionString();
+        public abstract string ToClientConnectionString();
+    }
+
+    public class TcpEndpoint : AZeroMQEndpoint, ITcpEndpoint
     {
         internal static TcpEndpoint Load(string[] facets)
         {
@@ -63,16 +78,16 @@ namespace Symvasi.Runtime.Transport.ZeroMQ
             this.Port = port;
         }
 
-        public string ToServerConnectionString()
+        public override string ToServerConnectionString()
         {
-            return string.Format("@tcp://*:{0}", this.Port);
+            return string.Format("tcp://*:{0}", this.Port);
         }
-        public string ToClientConnectionString()
+        public override string ToClientConnectionString()
         {
-            return string.Format(">tcp://{0}:{1}", this.Address, this.Port);
+            return string.Format("tcp://{0}:{1}", this.Address, this.Port);
         }
 
-        public SavedEndpoint Save()
+        public override SavedEndpoint Save()
         {
             var decodedData = string.Format("{0}|{1}|{2}", "tcp", this.Address, this.Port);
 
@@ -104,7 +119,7 @@ namespace Symvasi.Runtime.Transport.ZeroMQ
             }
         }
     }
-    public class InprocEndpoint : IZeroMQEndpoint
+    public class InprocEndpoint : AZeroMQEndpoint, IInprocEndpoint
     {
         private static Dictionary<string, int> AddressRegistry = new Dictionary<string, int>();
 
@@ -135,16 +150,16 @@ namespace Symvasi.Runtime.Transport.ZeroMQ
             this.Address = address;
         }
 
-        public string ToServerConnectionString()
+        public override string ToServerConnectionString()
         {
             return string.Format("@inproc://{0}", this.Address);
         }
-        public string ToClientConnectionString()
+        public override string ToClientConnectionString()
         {
             return string.Format(">inproc://{0}", this.Address);
         }
 
-        public SavedEndpoint Save()
+        public override SavedEndpoint Save()
         {
             var decodedData = string.Format("{0}|{1}", "inproc", this.Address);
 
@@ -173,33 +188,6 @@ namespace Symvasi.Runtime.Transport.ZeroMQ
 
                 return hash;
             }
-        }
-    }
-    public class DiscoveryEndpoint : IZeroMQEndpoint
-    {
-        public IDiscoverer<ZeroMQEndpointFactory, IZeroMQEndpoint> Discoverer { get; private set; }
-
-        public DiscoveryEndpoint(IDiscoverer<ZeroMQEndpointFactory, IZeroMQEndpoint> discoverer)
-        {
-            this.Discoverer = discoverer;
-        }
-
-        public string ToClientConnectionString()
-        {
-            var endpoint = this.Discoverer.GetEndpoint();
-
-            return endpoint.ToClientConnectionString();
-        }
-        public string ToServerConnectionString()
-        {
-            var endpoint = this.Discoverer.GetEndpoint();
-
-            return endpoint.ToServerConnectionString();
-        }
-
-        public SavedEndpoint Save()
-        {
-            throw new NotImplementedException();
         }
     }
 }

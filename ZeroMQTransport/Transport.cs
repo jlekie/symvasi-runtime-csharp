@@ -12,249 +12,334 @@ using Symvasi.Runtime.Acquisition;
 
 namespace Symvasi.Runtime.Transport.ZeroMQ
 {
-    public class ZeroMQServerTransport : AServerTransport
+    public interface IZeroMQReqRepTransport : ITransport
     {
-        public IZeroMQEndpoint ZeroMQEndpoint { get; private set; }
-
-        protected ResponseSocket Socket { get; private set; }
-
-        public ZeroMQServerTransport(IZeroMQEndpoint endpoint)
-            : base(endpoint)
-        {
-            this.ZeroMQEndpoint = endpoint;
-        }
-
-        public override void Listen()
-        {
-            var connectionString = this.ZeroMQEndpoint.ToServerConnectionString();
-
-            this.Socket = new ResponseSocket(connectionString);
-        }
-
-        public override void Send(byte[] data)
-        {
-            var message = new NetMQMessage();
-            message.Append(0);
-            message.AppendEmptyFrame();
-            message.Append(data);
-
-            this.Socket.SendMultipartMessage(message);
-        }
-        public override void Send(byte[] data, Guid schedulerId)
-        {
-            this.Send(data);
-        }
-
-        public override byte[] Receive()
-        {
-            var message = this.Socket.ReceiveMultipartMessage(3);
-
-            var signal = message[0].ConvertToInt32();
-            if (signal != 0)
-            {
-                var errorMessage = message[2].ConvertToString(Encoding.UTF8);
-                throw new Exception(string.Format("Server responded with ({0}) '{1}'", signal, errorMessage));
-            }
-
-            return message[2].ToByteArray();
-        }
-        public override byte[] Receive(Guid schedulerId)
-        {
-            return this.Receive();
-        }
+        //IZeroMQEndpoint Endpoint { get; }
+        string InterfaceName { get; set; }
     }
-    public class ZeroMQRequestServerTransport : AServerTransport
+
+    public class ZeroMQReqRepTransport : ATransport, IZeroMQReqRepTransport
     {
-        public IZeroMQEndpoint ZeroMQEndpoint { get; private set; }
+        public string InterfaceName { get; set; }
 
-        protected RequestSocket Socket { get; private set; }
+        private NetMQSocket Socket { get; set; }
 
-        private NetMQFrame ClientAddress { get; set; }
+        //public new IZeroMQEndpoint Endpoint
+        //{
+        //    get
+        //    {
+        //        return (IZeroMQEndpoint)base.Endpoint;
+        //    }
+        //}
+        //public IZeroMQEndpoint Endpoint { get; private set; }
 
-        public ZeroMQRequestServerTransport(IZeroMQEndpoint endpoint)
-            : base(endpoint)
+        public ZeroMQReqRepTransport(string interfaceName)
+            : base()
         {
-            this.ZeroMQEndpoint = endpoint;
+            this.InterfaceName = interfaceName;
         }
 
-        public override void Listen()
+        public override Task<IEndpoint> Listen()
         {
-            var connectionString = this.ZeroMQEndpoint.ToClientConnectionString();
-
-            this.Socket = new RequestSocket(connectionString);
-
-            Console.WriteLine("Sending registration request...");
-            this.Socket.SendFrameEmpty();
-            Console.WriteLine("Waiting for registration acknowledgement...");
-            this.Socket.SkipMultipartMessage();
-            Console.WriteLine("Sending all clear...");
-            this.Socket.SendFrameEmpty();
-        }
-
-        public override void Send(byte[] data)
-        {
-            var message = new NetMQMessage();
-            message.Append(this.ClientAddress);
-            message.AppendEmptyFrame();
-            message.Append(0);
-            message.AppendEmptyFrame();
-            message.Append(data);
-
-            this.Socket.SendMultipartMessage(message);
-        }
-        public override void Send(byte[] data, Guid schedulerId)
-        {
-            this.Send(data);
-        }
-
-        public override byte[] Receive()
-        {
-            var message = this.Socket.ReceiveMultipartMessage(5);
-
-            this.ClientAddress = message[0];
-
-            var signal = message[2].ConvertToInt32();
-            if (signal != 0)
+            return Task.Run<IEndpoint>(() =>
             {
-                var errorMessage = message[4].ConvertToString(Encoding.UTF8);
-                throw new Exception(string.Format("Server responded with ({0}) '{1}'", signal, errorMessage));
-            }
+                var zmqEndpoint = TcpEndpoint.Allocate(this.InterfaceName);
+                var connectionString = zmqEndpoint.ToServerConnectionString();
 
-            return message[4].ToByteArray();
+                this.Socket = new ResponseSocket();
+                this.Socket.Bind(connectionString);
+
+                return zmqEndpoint;
+            });
         }
-        public override byte[] Receive(Guid schedulerId)
+        public override Task Connect(IEndpoint endpoint)
         {
-            return this.Receive();
-        }
-    }
-    public class ZeroMQRouterServerTransport : AServerTransport
-    {
-        public IZeroMQEndpoint ZeroMQEndpoint { get; private set; }
-
-        protected RouterSocket Socket { get; private set; }
-        protected NetMQPoller Poller { get; private set; }
-
-        protected Dictionary<Guid, NetMQFrame> AddressRegistry { get; private set; }
-
-        private Task ServerTask { get; set; }
-
-        public ZeroMQRouterServerTransport(IZeroMQEndpoint endpoint)
-            : base(endpoint)
-        {
-            this.ZeroMQEndpoint = endpoint;
-
-            this.AddressRegistry = new Dictionary<Guid, NetMQFrame>();
-        }
-
-        public override void Listen()
-        {
-            var connectionString = this.ZeroMQEndpoint.ToServerConnectionString();
-
-            this.Socket = new RouterSocket(connectionString);
-            this.Socket.ReceiveReady += (sender, e) =>
+            return Task.Run(() =>
             {
-                this.OnReceived();
-            };
+                var zmqEndpoint = endpoint as IZeroMQEndpoint;
+                if (zmqEndpoint == null)
+                    throw new Exception("Invalid endpoint");
 
-            this.Poller = new NetMQPoller() { this.Socket };
+                var connectionString = zmqEndpoint.ToClientConnectionString();
 
-            this.ServerTask = Task.Factory.StartNew(() => this.ServerHandler(), TaskCreationOptions.LongRunning);
+                this.Socket = new RequestSocket();
+                this.Socket.Connect(connectionString);
+            });
         }
 
-        public override void Send(byte[] data)
+        public override Task Send(byte[] data)
         {
-            throw new Exception("Router transport requires a scheduler ID");
-        }
-        public override void Send(byte[] data, Guid schedulerId)
-        {
-            NetMQFrame address;
-            if (!this.AddressRegistry.TryGetValue(schedulerId, out address))
+            return Task.Run(() =>
             {
-                throw new Exception(string.Format("No address registered for schedule ID '{0}'", schedulerId));
-            }
-            this.AddressRegistry.Remove(schedulerId);
+                var message = new NetMQMessage();
+                message.Append(0);
+                message.AppendEmptyFrame();
+                message.Append(data);
 
-            var message = new NetMQMessage();
-            message.Append(address);
-            message.AppendEmptyFrame();
-            message.Append(0);
-            message.AppendEmptyFrame();
-            message.Append(data);
-
-            this.Socket.SendMultipartMessage(message);
+                this.Socket.SendMultipartMessage(message);
+            });
         }
-
-        public override byte[] Receive()
+        public override Task<byte[]> Receive()
         {
-            throw new Exception("Router transport requires a scheduler ID");
-        }
-        public override byte[] Receive(Guid schedulerId)
-        {
-            var message = this.Socket.ReceiveMultipartMessage(5);
-
-            var address = message[0];
-            if (this.AddressRegistry.ContainsKey(schedulerId))
+            return Task.Run(() =>
             {
-                throw new Exception(string.Format("Address already registered for schedule ID '{0}'", schedulerId));
-            }
-            this.AddressRegistry.Add(schedulerId, address);
+                var message = this.Socket.ReceiveMultipartMessage(3);
 
-            var signal = message[2].ConvertToInt32();
-            if (signal != 0)
-            {
-                var errorMessage = message[4].ConvertToString(Encoding.UTF8);
-                throw new Exception(string.Format("Server responded with ({0}) '{1}'", signal, errorMessage));
-            }
+                var signal = message[0].ConvertToInt32();
+                if (signal != 0)
+                {
+                    var errorMessage = message[2].ConvertToString(Encoding.UTF8);
+                    throw new Exception(string.Format("Server responded with ({0}) '{1}'", signal, errorMessage));
+                }
 
-            return message[4].ToByteArray();
-        }
-
-        private void ServerHandler()
-        {
-            this.Poller.Run();
+                return message[2].ToByteArray();
+            });
         }
     }
 
-    public class ZeroMQClientTransport : AClientTransport
-    {
-        public IZeroMQEndpoint ZeroMQEndpoint { get; private set; }
+    //public class ZeroMQServerTransport : AServerTransport
+    //{
+    //    public IZeroMQEndpoint ZeroMQEndpoint { get; private set; }
 
-        protected RequestSocket Socket { get; private set; }
+    //    protected ResponseSocket Socket { get; private set; }
 
-        public ZeroMQClientTransport(IZeroMQEndpoint endpoint)
-            : base(endpoint)
-        {
-            this.ZeroMQEndpoint = endpoint;
-        }
+    //    public ZeroMQServerTransport(IZeroMQEndpoint endpoint)
+    //        : base(endpoint)
+    //    {
+    //        this.ZeroMQEndpoint = endpoint;
+    //    }
 
-        public override void Connect()
-        {
-            var connectionString = this.ZeroMQEndpoint.ToClientConnectionString();
+    //    public override void Listen()
+    //    {
+    //        var connectionString = this.ZeroMQEndpoint.ToServerConnectionString();
 
-            this.Socket = new RequestSocket(connectionString);
-        }
+    //        this.Socket = new ResponseSocket(connectionString);
+    //    }
 
-        public override void Send(byte[] data)
-        {
-            var message = new NetMQMessage();
-            message.Append(0);
-            message.AppendEmptyFrame();
-            message.Append(data);
+    //    public override void Send(byte[] data)
+    //    {
+    //        var message = new NetMQMessage();
+    //        message.Append(0);
+    //        message.AppendEmptyFrame();
+    //        message.Append(data);
 
-            this.Socket.SendMultipartMessage(message);
-        }
-        public override byte[] Receive()
-        {
-            var message = this.Socket.ReceiveMultipartMessage(3);
+    //        this.Socket.SendMultipartMessage(message);
+    //    }
+    //    public override void Send(byte[] data, Guid schedulerId)
+    //    {
+    //        this.Send(data);
+    //    }
 
-            var signal = message[0].ConvertToInt32();
-            if (signal != 0)
-            {
-                var errorMessage = message[2].ConvertToString(Encoding.UTF8);
-                throw new Exception(string.Format("Server responded with ({0}) '{1}'", signal, errorMessage));
-            }
+    //    public override byte[] Receive()
+    //    {
+    //        var message = this.Socket.ReceiveMultipartMessage(3);
 
-            return message[2].ToByteArray();
-        }
-    }
+    //        var signal = message[0].ConvertToInt32();
+    //        if (signal != 0)
+    //        {
+    //            var errorMessage = message[2].ConvertToString(Encoding.UTF8);
+    //            throw new Exception(string.Format("Server responded with ({0}) '{1}'", signal, errorMessage));
+    //        }
+
+    //        return message[2].ToByteArray();
+    //    }
+    //    public override byte[] Receive(Guid schedulerId)
+    //    {
+    //        return this.Receive();
+    //    }
+    //}
+    //public class ZeroMQRequestServerTransport : AServerTransport
+    //{
+    //    public IZeroMQEndpoint ZeroMQEndpoint { get; private set; }
+
+    //    protected RequestSocket Socket { get; private set; }
+
+    //    private NetMQFrame ClientAddress { get; set; }
+
+    //    public ZeroMQRequestServerTransport(IZeroMQEndpoint endpoint)
+    //        : base(endpoint)
+    //    {
+    //        this.ZeroMQEndpoint = endpoint;
+    //    }
+
+    //    public override void Listen()
+    //    {
+    //        var connectionString = this.ZeroMQEndpoint.ToClientConnectionString();
+
+    //        this.Socket = new RequestSocket(connectionString);
+
+    //        Console.WriteLine("Sending registration request...");
+    //        this.Socket.SendFrameEmpty();
+    //        Console.WriteLine("Waiting for registration acknowledgement...");
+    //        this.Socket.SkipMultipartMessage();
+    //        Console.WriteLine("Sending all clear...");
+    //        this.Socket.SendFrameEmpty();
+    //    }
+
+    //    public override void Send(byte[] data)
+    //    {
+    //        var message = new NetMQMessage();
+    //        message.Append(this.ClientAddress);
+    //        message.AppendEmptyFrame();
+    //        message.Append(0);
+    //        message.AppendEmptyFrame();
+    //        message.Append(data);
+
+    //        this.Socket.SendMultipartMessage(message);
+    //    }
+    //    public override void Send(byte[] data, Guid schedulerId)
+    //    {
+    //        this.Send(data);
+    //    }
+
+    //    public override byte[] Receive()
+    //    {
+    //        var message = this.Socket.ReceiveMultipartMessage(5);
+
+    //        this.ClientAddress = message[0];
+
+    //        var signal = message[2].ConvertToInt32();
+    //        if (signal != 0)
+    //        {
+    //            var errorMessage = message[4].ConvertToString(Encoding.UTF8);
+    //            throw new Exception(string.Format("Server responded with ({0}) '{1}'", signal, errorMessage));
+    //        }
+
+    //        return message[4].ToByteArray();
+    //    }
+    //    public override byte[] Receive(Guid schedulerId)
+    //    {
+    //        return this.Receive();
+    //    }
+    //}
+    //public class ZeroMQRouterServerTransport : AServerTransport
+    //{
+    //    public IZeroMQEndpoint ZeroMQEndpoint { get; private set; }
+
+    //    protected RouterSocket Socket { get; private set; }
+    //    protected NetMQPoller Poller { get; private set; }
+
+    //    protected Dictionary<Guid, NetMQFrame> AddressRegistry { get; private set; }
+
+    //    private Task ServerTask { get; set; }
+
+    //    public ZeroMQRouterServerTransport(IZeroMQEndpoint endpoint)
+    //        : base(endpoint)
+    //    {
+    //        this.ZeroMQEndpoint = endpoint;
+
+    //        this.AddressRegistry = new Dictionary<Guid, NetMQFrame>();
+    //    }
+
+    //    public override void Listen()
+    //    {
+    //        var connectionString = this.ZeroMQEndpoint.ToServerConnectionString();
+
+    //        this.Socket = new RouterSocket(connectionString);
+    //        this.Socket.ReceiveReady += (sender, e) =>
+    //        {
+    //            this.OnReceived();
+    //        };
+
+    //        this.Poller = new NetMQPoller() { this.Socket };
+
+    //        this.ServerTask = Task.Factory.StartNew(() => this.ServerHandler(), TaskCreationOptions.LongRunning);
+    //    }
+
+    //    public override void Send(byte[] data)
+    //    {
+    //        throw new Exception("Router transport requires a scheduler ID");
+    //    }
+    //    public override void Send(byte[] data, Guid schedulerId)
+    //    {
+    //        NetMQFrame address;
+    //        if (!this.AddressRegistry.TryGetValue(schedulerId, out address))
+    //        {
+    //            throw new Exception(string.Format("No address registered for schedule ID '{0}'", schedulerId));
+    //        }
+    //        this.AddressRegistry.Remove(schedulerId);
+
+    //        var message = new NetMQMessage();
+    //        message.Append(address);
+    //        message.AppendEmptyFrame();
+    //        message.Append(0);
+    //        message.AppendEmptyFrame();
+    //        message.Append(data);
+
+    //        this.Socket.SendMultipartMessage(message);
+    //    }
+
+    //    public override byte[] Receive()
+    //    {
+    //        throw new Exception("Router transport requires a scheduler ID");
+    //    }
+    //    public override byte[] Receive(Guid schedulerId)
+    //    {
+    //        var message = this.Socket.ReceiveMultipartMessage(5);
+
+    //        var address = message[0];
+    //        if (this.AddressRegistry.ContainsKey(schedulerId))
+    //        {
+    //            throw new Exception(string.Format("Address already registered for schedule ID '{0}'", schedulerId));
+    //        }
+    //        this.AddressRegistry.Add(schedulerId, address);
+
+    //        var signal = message[2].ConvertToInt32();
+    //        if (signal != 0)
+    //        {
+    //            var errorMessage = message[4].ConvertToString(Encoding.UTF8);
+    //            throw new Exception(string.Format("Server responded with ({0}) '{1}'", signal, errorMessage));
+    //        }
+
+    //        return message[4].ToByteArray();
+    //    }
+
+    //    private void ServerHandler()
+    //    {
+    //        this.Poller.Run();
+    //    }
+    //}
+
+    //public class ZeroMQClientTransport : AClientTransport
+    //{
+    //    public IZeroMQEndpoint ZeroMQEndpoint { get; private set; }
+
+    //    protected RequestSocket Socket { get; private set; }
+
+    //    public ZeroMQClientTransport(IZeroMQEndpoint endpoint)
+    //        : base(endpoint)
+    //    {
+    //        this.ZeroMQEndpoint = endpoint;
+    //    }
+
+    //    public override void Connect()
+    //    {
+    //        var connectionString = this.ZeroMQEndpoint.ToClientConnectionString();
+
+    //        this.Socket = new RequestSocket(connectionString);
+    //    }
+
+    //    public override void Send(byte[] data)
+    //    {
+    //        var message = new NetMQMessage();
+    //        message.Append(0);
+    //        message.AppendEmptyFrame();
+    //        message.Append(data);
+
+    //        this.Socket.SendMultipartMessage(message);
+    //    }
+    //    public override byte[] Receive()
+    //    {
+    //        var message = this.Socket.ReceiveMultipartMessage(3);
+
+    //        var signal = message[0].ConvertToInt32();
+    //        if (signal != 0)
+    //        {
+    //            var errorMessage = message[2].ConvertToString(Encoding.UTF8);
+    //            throw new Exception(string.Format("Server responded with ({0}) '{1}'", signal, errorMessage));
+    //        }
+
+    //        return message[2].ToByteArray();
+    //    }
+    //}
 }

@@ -6,9 +6,9 @@ using System.Threading.Tasks;
 
 namespace Symvasi.Runtime.Transport.ZeroMQ
 {
-    public class ZeroMQEndpointFactory : IEndpointFactory<IZeroMQEndpoint>
+    public class ZeroMQEndpointFactory : IEndpointFactory
     {
-        public IZeroMQEndpoint Load(byte[] data)
+        public IEndpoint Load(byte[] data)
         {
             var decodedData = System.Text.Encoding.UTF8.GetString(data);
 
