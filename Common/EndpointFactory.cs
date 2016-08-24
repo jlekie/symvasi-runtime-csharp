@@ -6,8 +6,8 @@ using System.Threading.Tasks;
 
 namespace Symvasi.Runtime
 {
-    public interface IEndpointFactory<TEndpoint> where TEndpoint : IEndpoint
+    public interface IEndpointFactory
     {
-        TEndpoint Load(byte[] data);
+        IEndpoint Load(byte[] data);
     }
 }

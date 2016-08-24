@@ -23,4 +23,14 @@ namespace Symvasi.Runtime
     {
         SavedEndpoint Save();
     }
+
+    public abstract class AEndpoint : IEndpoint
+    {
+        public override bool Equals(object obj)
+        {
+            return false;
+        }
+
+        public abstract SavedEndpoint Save();
+    }
 }

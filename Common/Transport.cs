@@ -4,76 +4,29 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
+using Symvasi.Runtime.Acquisition;
+
 namespace Symvasi.Runtime.Transport
 {
     public interface ITransport
     {
-        void Send(byte[] data);
-        byte[] Receive();
-    }
-    public interface IServerTransport : ITransport
-    {
-        event EventHandler<ReceivedEventArgs> Received;
+        Task<IEndpoint> Listen();
+        Task Connect(IEndpoint endpoint);
 
-        IEndpoint Endpoint { get; }
-
-        void Send(byte[] data, Guid schedulerId);
-        byte[] Receive(Guid schedulerId);
-
-        void Listen();
-    }
-    public interface IClientTransport : ITransport
-    {
-        IEndpoint Endpoint { get; }
-
-        void Connect();
+        Task Send(byte[] data);
+        Task<byte[]> Receive();
     }
 
-    public abstract class AServerTransport : IServerTransport
+    public abstract class ATransport : ITransport
     {
-        public event EventHandler<ReceivedEventArgs> Received;
-
-        public IEndpoint Endpoint { get; private set; }
-
-        public AServerTransport(IEndpoint endpoint)
-        {
-            this.Endpoint = endpoint;
-        }
-
-        public abstract void Listen();
-
-        public abstract void Send(byte[] data);
-        public abstract void Send(byte[] data, Guid schedulerId);
-
-        public abstract byte[] Receive();
-        public abstract byte[] Receive(Guid schedulerId);
-
-        protected virtual void OnReceived()
-        {
-            if (this.Received != null)
-                this.Received(this, new ReceivedEventArgs());
-        }
-    }
-    public abstract class AClientTransport : IClientTransport
-    {
-        public IEndpoint Endpoint { get; private set; }
-
-        public AClientTransport(IEndpoint endpoint)
-        {
-            this.Endpoint = endpoint;
-        }
-
-        public abstract void Connect();
-
-        public abstract void Send(byte[] data);
-        public abstract byte[] Receive();
-    }
-
-    public class ReceivedEventArgs : EventArgs
-    {
-        public ReceivedEventArgs()
-            : base()
+        public ATransport()
         {
         }
+
+        public abstract Task<IEndpoint> Listen();
+        public abstract Task Connect(IEndpoint endpoint);
+
+        public abstract Task Send(byte[] data);
+        public abstract Task<byte[]> Receive();
     }
 }

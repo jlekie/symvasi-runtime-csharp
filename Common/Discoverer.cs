@@ -8,147 +8,75 @@ using System.Collections.Concurrent;
 
 namespace Symvasi.Runtime.Acquisition
 {
-    public interface IDiscoverer<TEndpointFactory, TEndpoint>
-        where TEndpointFactory : IEndpointFactory<TEndpoint>, new()
-        where TEndpoint : IEndpoint
+    public interface IDiscoverer
     {
-        void Start();
-        void Stop();
+        Task<IEnumerable<IEndpoint>> LoadEndpoints();
 
-        void Refresh();
-
-        TEndpoint GetEndpoint(TimeSpan? timeout = null, int retryInterval = 500);
-        bool TryGetEndpoint(out TEndpoint endpoint, TimeSpan? timeout = null, int retryInterval = 500);
+        Task<IEndpoint> GetEndpoint(TimeSpan? timeout = null, int retryInterval = 500);
     }
 
-    public abstract class ADiscoverer<TEndpointFactory, TEndpoint> : IDiscoverer<TEndpointFactory, TEndpoint>
-        where TEndpointFactory : IEndpointFactory<TEndpoint>, new()
-        where TEndpoint : IEndpoint
+    public abstract class ADiscoverer : IDiscoverer
     {
-        protected TEndpointFactory EndpointFactory { get; private set; }
-        protected System.Collections.Concurrent.ConcurrentQueue<TEndpoint> Endpoints { get; private set; }
+        public string ServiceName { get; private set; }
+        protected IEndpointFactory EndpointFactory { get; private set; }
 
-        private Task HandlerTask { get; set; }
-
-        public ADiscoverer()
+        public ADiscoverer(IEndpointFactory endpointFactory, string serviceName)
         {
-            this.EndpointFactory = new TEndpointFactory();
-            this.Endpoints = new System.Collections.Concurrent.ConcurrentQueue<TEndpoint>();
+            this.EndpointFactory = endpointFactory;
         }
 
-        public void Start()
-        {
-            this.Refresh();
-
-            this.HandlerTask = Task.Factory.StartNew(() => this.Handler(), TaskCreationOptions.LongRunning);
-        }
-        public void Stop()
-        {
-            throw new NotImplementedException();
-        }
-
-        public void Refresh()
-        {
-            var endpointCount = this.Endpoints.Count;
-
-            var endpoints = this.LoadEndpoints();
-            foreach (var endpoint in endpoints)
-            {
-                if (!this.Endpoints.Contains(endpoint))
-                {
-                    this.Endpoints.Enqueue(endpoint);
-                }
-            }
-        }
-
-        private void Handler()
-        {
-            while (true)
-            {
-                try
-                {
-                    this.Refresh();
-
-                    System.Threading.Thread.Sleep(5000);
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine("Error: " + ex.Message);
-                }
-            }
-        }
-
-        public TEndpoint GetEndpoint(TimeSpan? timeout = null, int retryInterval = 500)
+        public abstract Task<IEnumerable<IEndpoint>> LoadEndpoints();
+        public async Task<IEndpoint> GetEndpoint(TimeSpan? timeout = null, int retryInterval = 500)
         {
             if (!timeout.HasValue)
                 timeout = TimeSpan.FromSeconds(30);
 
             var startTime = DateTime.Now;
 
-            TEndpoint endpoint;
-            while (!this.Endpoints.TryDequeue(out endpoint))
+            var endpoints = await this.LoadEndpoints();
+            while (!endpoints.Any())
             {
                 if ((DateTime.Now - startTime) > timeout)
                     throw new Exception("Could not find backend endpoint.");
 
                 System.Threading.Thread.Sleep(retryInterval);
+
+                endpoints = await this.LoadEndpoints();
             }
-            this.Endpoints.Enqueue(endpoint);
 
-            return endpoint;
+            return endpoints.FirstOrDefault();
         }
-        public bool TryGetEndpoint(out TEndpoint endpoint, TimeSpan? timeout = null, int retryInterval = 500)
-        {
-            if (!timeout.HasValue)
-                timeout = TimeSpan.FromSeconds(30);
-
-            var startTime = DateTime.Now;
-
-            while (!this.Endpoints.TryDequeue(out endpoint))
-            {
-                if ((DateTime.Now - startTime) > timeout)
-                    return false;
-
-                System.Threading.Thread.Sleep(retryInterval);
-            }
-            this.Endpoints.Enqueue(endpoint);
-
-            return true;
-        }
-
-        protected abstract IEnumerable<TEndpoint> LoadEndpoints();
     }
 }
 
 namespace Symvasi.Runtime.Acquisition.Dictionary
 {
-    public class DictionaryDiscoverer<TEndpointFactory, TEndpoint> : ADiscoverer<TEndpointFactory, TEndpoint>
-        where TEndpointFactory : IEndpointFactory<TEndpoint>, new()
-        where TEndpoint : IEndpoint
+    public class DictionaryDiscoverer : ADiscoverer
     {
-        public string ServiceName { get; private set; }
         protected ConcurrentDictionary<string, Dictionary<string, string>> Registry { get; private set; }
 
-        public DictionaryDiscoverer(string serviceName, ConcurrentDictionary<string, Dictionary<string, string>> registry)
-            : base()
+        public DictionaryDiscoverer(IEndpointFactory endpointFactory, string serviceName, ConcurrentDictionary<string, Dictionary<string, string>> registry)
+            : base(endpointFactory, serviceName)
         {
-            this.ServiceName = serviceName;
-
             this.Registry = registry;
         }
 
-        protected override IEnumerable<TEndpoint> LoadEndpoints()
+        public override Task<IEnumerable<IEndpoint>> LoadEndpoints()
         {
+            IEnumerable<IEndpoint> result;
+
             Dictionary<string, string> endpoints;
             if (!this.Registry.TryGetValue(this.ServiceName, out endpoints))
-                return new TEndpoint[] { };
+                result = new IEndpoint[] { };
 
-            return endpoints.Values.Select(endpoint =>
+            result = endpoints.Values.Select(endpoint =>
             {
                 var encodedData = System.Text.Encoding.UTF8.GetBytes(endpoint);
 
                 return this.EndpointFactory.Load(encodedData);
             }).ToArray();
+
+            return Task.FromResult(result);
         }
     }
 }

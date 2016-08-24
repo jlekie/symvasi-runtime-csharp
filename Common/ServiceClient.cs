@@ -6,28 +6,39 @@ using System.Threading.Tasks;
 
 using Symvasi.Runtime.Transport;
 using Symvasi.Runtime.Protocol;
+using Symvasi.Runtime.Acquisition;
 
 namespace Symvasi.Runtime.Service
 {
     public interface IServiceClient
     {
-        void Connect();
+        ITransport Transport { get; }
+        IProtocol Protocol { get; }
+
+        Task Connect(IDiscoverer discoverer);
+        Task Connect(IEndpoint endpoint);
     }
 
     public abstract class AServiceClient : IServiceClient
     {
-        public IClientTransport Transport { get; private set; }
-        public IClientProtocol Protocol { get; private set; }
+        public ITransport Transport { get; private set; }
+        public IProtocol Protocol { get; private set; }
 
-        public AServiceClient(IClientTransport transport, IClientProtocol protocol)
+        public AServiceClient(ITransport transport, IProtocol protocol)
         {
             this.Transport = transport;
             this.Protocol = protocol;
         }
 
-        public virtual void Connect()
+        public async Task Connect(IDiscoverer discoverer)
         {
-            this.Transport.Connect();
+            var endpoint = await discoverer.GetEndpoint();
+
+            await this.Transport.Connect(endpoint);
+        }
+        public async Task Connect(IEndpoint endpoint)
+        {
+            await this.Transport.Connect(endpoint);
         }
     }
 }

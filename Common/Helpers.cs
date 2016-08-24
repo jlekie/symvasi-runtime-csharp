@@ -21,6 +21,8 @@ namespace Symvasi.Runtime.Protocol
                 type = IndefinateTypes.Float;
             else if (value is double)
                 type = IndefinateTypes.Double;
+            else if (value is decimal)
+                type = IndefinateTypes.Double;
             else if (value is byte)
                 type = IndefinateTypes.Byte;
             else if (value is Enum)
