@@ -8,23 +8,23 @@ using Draft;
 
 namespace Symvasi.Runtime.Acquisition.Etcd
 {
-    public class EtcdAnnouncer<TEndpoint> : AAnnouncer<TEndpoint> where TEndpoint : IEndpoint
+    public class EtcdAnnouncer : AAnnouncer
     {
         protected Draft.IEtcdClient EtcdClient { get; private set; }
 
-        public EtcdAnnouncer(TEndpoint endpoint, string serviceName, string etcdUrl)
-            : base(endpoint, serviceName)
+        public EtcdAnnouncer(string serviceName, string etcdUrl)
+            : base(serviceName)
         {
             this.EtcdClient = Draft.Etcd.ClientFor(new Uri(etcdUrl));
         }
 
-        protected override void Register()
+        public override async Task Register(IEndpoint endpoint)
         {
-            var savedEndpoint = this.Endpoint.Save();
+            var savedEndpoint = endpoint.Save();
             var decodedData = System.Text.Encoding.UTF8.GetString(savedEndpoint.Data);
 
-            this.EtcdClient.UpsertKey(string.Format("/symvasi/endpoints/{0}/{1}", this.ServiceName, savedEndpoint.Id))
-                .WithValue(decodedData).WithTimeToLive(20).GetAwaiter().GetResult();
+            await this.EtcdClient.UpsertKey(string.Format("/symvasi/endpoints/{0}/{1}", this.ServiceName, savedEndpoint.Id))
+                .WithValue(decodedData).WithTimeToLive(20);
         }
     }
 }

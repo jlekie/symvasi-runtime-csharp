@@ -8,26 +8,20 @@ using Draft;
 
 namespace Symvasi.Runtime.Acquisition.Etcd
 {
-    public class EtcdDiscoverer<TEndpointFactory, TEndpoint> : ADiscoverer<TEndpointFactory, TEndpoint>
-        where TEndpointFactory : IEndpointFactory<TEndpoint>, new()
-        where TEndpoint : IEndpoint
+    public class EtcdDiscoverer : ADiscoverer
     {
-        public string ServiceName { get; private set; }
         protected Draft.IEtcdClient EtcdClient { get; private set; }
 
-        public EtcdDiscoverer(string serviceName, string etcdUrl)
-            : base()
+        public EtcdDiscoverer(IEndpointFactory endpointFactory, string serviceName, string etcdUrl)
+            : base(endpointFactory, serviceName)
         {
-            this.ServiceName = serviceName;
-
             this.EtcdClient = Draft.Etcd.ClientFor(new Uri(etcdUrl));
         }
 
-        protected override IEnumerable<TEndpoint> LoadEndpoints()
+        public override async Task<IEnumerable<IEndpoint>> LoadEndpoints()
         {
-            var result = this.EtcdClient
-                .GetKey("/symvasi/endpoints/" + this.ServiceName)
-                .GetAwaiter().GetResult().Data;
+            var result = (await this.EtcdClient
+                .GetKey("/symvasi/endpoints/" + this.ServiceName)).Data;
 
             if (!result.IsDir)
                 throw new Exception(string.Format("Invalid key (not directory) '{0}'", "/symvasi/endpoints/" + this.ServiceName));
