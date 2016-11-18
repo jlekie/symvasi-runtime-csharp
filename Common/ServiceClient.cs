@@ -15,8 +15,7 @@ namespace Symvasi.Runtime.Service
         ITransport Transport { get; }
         IProtocol Protocol { get; }
 
-        Task Connect(IDiscoverer discoverer);
-        Task Connect(IEndpoint endpoint);
+        Task Connect();
     }
 
     public abstract class AServiceClient : IServiceClient
@@ -30,15 +29,9 @@ namespace Symvasi.Runtime.Service
             this.Protocol = protocol;
         }
 
-        public async Task Connect(IDiscoverer discoverer)
+        public async Task Connect()
         {
-            var endpoint = await discoverer.GetEndpoint();
-
-            await this.Transport.Connect(endpoint);
-        }
-        public async Task Connect(IEndpoint endpoint)
-        {
-            await this.Transport.Connect(endpoint);
+            await this.Transport.Connect();
         }
     }
 }

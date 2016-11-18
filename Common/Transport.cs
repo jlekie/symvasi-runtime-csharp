@@ -11,7 +11,7 @@ namespace Symvasi.Runtime.Transport
     public interface ITransport
     {
         Task<IEndpoint> Listen();
-        Task Connect(IEndpoint endpoint);
+        Task Connect();
 
         Task Send(byte[] data);
         Task<byte[]> Receive();
@@ -24,7 +24,7 @@ namespace Symvasi.Runtime.Transport
         }
 
         public abstract Task<IEndpoint> Listen();
-        public abstract Task Connect(IEndpoint endpoint);
+        public abstract Task Connect();
 
         public abstract Task Send(byte[] data);
         public abstract Task<byte[]> Receive();

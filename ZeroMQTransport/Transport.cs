@@ -15,12 +15,12 @@ namespace Symvasi.Runtime.Transport.ZeroMQ
     public interface IZeroMQReqRepTransport : ITransport
     {
         //IZeroMQEndpoint Endpoint { get; }
-        string InterfaceName { get; set; }
+        //string InterfaceName { get; set; }
     }
 
     public class ZeroMQReqRepTransport : ATransport, IZeroMQReqRepTransport
     {
-        public string InterfaceName { get; set; }
+        public Func<IZeroMQEndpoint> ServerEndpointFactory { get; private set; }
 
         private NetMQSocket Socket { get; set; }
 
@@ -33,17 +33,17 @@ namespace Symvasi.Runtime.Transport.ZeroMQ
         //}
         //public IZeroMQEndpoint Endpoint { get; private set; }
 
-        public ZeroMQReqRepTransport(string interfaceName)
+        public ZeroMQReqRepTransport(Func<IZeroMQEndpoint> serverEndpointFactory)
             : base()
         {
-            this.InterfaceName = interfaceName;
+            this.ServerEndpointFactory = serverEndpointFactory;
         }
 
         public override Task<IEndpoint> Listen()
         {
             return Task.Run<IEndpoint>(() =>
             {
-                var zmqEndpoint = TcpEndpoint.Allocate(this.InterfaceName);
+                var zmqEndpoint = this.ServerEndpointFactory();
                 var connectionString = zmqEndpoint.ToServerConnectionString();
 
                 this.Socket = new ResponseSocket();
@@ -52,11 +52,11 @@ namespace Symvasi.Runtime.Transport.ZeroMQ
                 return zmqEndpoint;
             });
         }
-        public override Task Connect(IEndpoint endpoint)
+        public override Task Connect()
         {
             return Task.Run(() =>
             {
-                var zmqEndpoint = endpoint as IZeroMQEndpoint;
+                var zmqEndpoint = this.ServerEndpointFactory();
                 if (zmqEndpoint == null)
                     throw new Exception("Invalid endpoint");
 

@@ -152,11 +152,11 @@ namespace Symvasi.Runtime.Transport.ZeroMQ
 
         public override string ToServerConnectionString()
         {
-            return string.Format("@inproc://{0}", this.Address);
+            return string.Format("inproc://{0}", this.Address);
         }
         public override string ToClientConnectionString()
         {
-            return string.Format(">inproc://{0}", this.Address);
+            return string.Format("inproc://{0}", this.Address);
         }
 
         public override SavedEndpoint Save()
